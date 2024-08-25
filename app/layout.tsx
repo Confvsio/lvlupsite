@@ -1,5 +1,6 @@
 import './globals.css'
 import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
 import { PT_Sans } from 'next/font/google'
 import SupabaseProvider from './supabase-provider'
 import NavbarWrapper from '../components/NavbarWrapper'
@@ -14,6 +15,8 @@ export const metadata: Metadata = {
 
 import { Roboto_Slab } from 'next/font/google'
 
+const inter = Inter({ subsets: ['latin'] })
+
 const robotoSlab = Roboto_Slab({ subsets: ['latin'] })
 
 export default function RootLayout({
@@ -26,7 +29,7 @@ export default function RootLayout({
       <head>
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
       </head>
-      <body>
+      <body className={`${inter.className} bg-cyan-50`}>
         <SupabaseProvider>
           <NavbarWrapper />
           {children}
