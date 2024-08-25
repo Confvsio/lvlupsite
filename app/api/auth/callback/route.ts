@@ -11,19 +11,13 @@ export async function GET(request: Request) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error && data?.user) {
-      // Ensure we're capturing the Discord username
-      const discordUsername = data.user.user_metadata?.full_name || 
-                              data.user.user_metadata?.name ||
-                              data.user.user_metadata?.preferred_username
+      // Check if the user already has a username
+      const discordUsername = data.user.user_metadata?.username
 
-      if (discordUsername) {
-        // Update the user metadata with the Discord username
-        await supabase.auth.updateUser({
-          data: { username: discordUsername }
-        })
+      if (!discordUsername) {
+        // If no username is set, redirect to a page where they can set it
+        return NextResponse.redirect(`${requestUrl.origin}/set-username`)
       }
-
-      console.log('User data after login:', data.user) // For debugging
     }
   }
 

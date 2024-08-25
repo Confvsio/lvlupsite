@@ -2,7 +2,7 @@
 
 body {
   font-family: 'Roboto Slab', serif;
-  background-color: #cbfafa;
+  background: #cbfafa;
 }
 
 @tailwind base;

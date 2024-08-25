@@ -15,15 +15,8 @@ export default function Navbar() {
 
   useEffect(() => {
     if (user) {
-      // Check different possible locations of the username in the user object
-      const discordUsername = user.user_metadata?.full_name || 
-                              user.user_metadata?.name ||
-                              user.user_metadata?.user_name ||
-                              user.user_metadata?.preferred_username ||
-                              'Utilisateur'
+      const discordUsername = user.user_metadata?.username || 'Profil'
       setUsername(discordUsername)
-      
-      console.log('User metadata:', user.user_metadata) // For debugging
     }
   }, [user])
 
