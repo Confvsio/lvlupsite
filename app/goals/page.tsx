@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import CategoryManager from '@/components/CategoryManager'
 import { PlusIcon, PencilIcon, TrashIcon, CheckIcon, XMarkIcon } from '@heroicons/react/24/outline'
 
 type MetricType = 'percentage' | 'number' | 'boolean' | 'time'
@@ -21,6 +22,11 @@ type Goal = {
   user_id: string
 }
 
+type Category = {
+  id: number
+  name: string
+}
+
 const metricTypeOptions: { value: MetricType; label: string }[] = [
   { value: 'percentage', label: 'Pourcentage' },
   { value: 'number', label: 'Nombre' },
@@ -32,6 +38,7 @@ export default function Goals() {
   const user = useUser()
   const supabase = useSupabaseClient()
   const [goals, setGoals] = useState<Goal[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [newGoal, setNewGoal] = useState<Partial<Goal>>({
     title: '',
@@ -45,10 +52,13 @@ export default function Goals() {
   })
   const [isAddingGoal, setIsAddingGoal] = useState(false)
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null)
+  const [filter, setFilter] = useState<string>('all')
+  const [sort, setSort] = useState<string>('end_date')
 
   useEffect(() => {
     if (user) {
       fetchGoals()
+      fetchCategories()
     }
   }, [user])
 
@@ -57,7 +67,6 @@ export default function Goals() {
       .from('goals')
       .select('*')
       .eq('user_id', user?.id)
-      .order('created_at', { ascending: false })
 
     if (error) {
       console.error('Error fetching goals:', error)
@@ -65,6 +74,19 @@ export default function Goals() {
       setGoals(data || [])
     }
     setIsLoading(false)
+  }
+
+  async function fetchCategories() {
+    const { data, error } = await supabase
+      .from('categories')
+      .select('*')
+      .order('name', { ascending: true })
+
+    if (error) {
+      console.error('Error fetching categories:', error)
+    } else {
+      setCategories(data || [])
+    }
   }
 
   async function addGoal(e: React.FormEvent) {
@@ -158,6 +180,17 @@ export default function Goals() {
     }
   }
 
+  const filteredAndSortedGoals = goals
+    .filter(goal => filter === 'all' || goal.category === filter)
+    .sort((a, b) => {
+      if (sort === 'alphabet') {
+        return a.title.localeCompare(b.title)
+      } else if (sort === 'end_date') {
+        return new Date(a.end_date).getTime() - new Date(b.end_date).getTime()
+      }
+      return 0
+    })
+
   if (isLoading) {
     return <LoadingSpinner />
   }
@@ -166,6 +199,8 @@ export default function Goals() {
     <div className="max-w-4xl mx-auto p-4">
       <h1 className="text-3xl font-bold mb-6 text-center">Mes Objectifs</h1>
 
+      <CategoryManager onCategoriesChange={fetchCategories} />
+
       <button
         onClick={() => setIsAddingGoal(true)}
         className="mb-6 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 flex items-center"
@@ -173,6 +208,27 @@ export default function Goals() {
         <PlusIcon className="h-5 w-5 mr-2" />
         Ajouter un nouvel objectif
       </button>
+
+      <div className="mb-6 flex space-x-4">
+        <select
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          className="p-2 border rounded"
+        >
+          <option value="all">Toutes les catégories</option>
+          {categories.map((category) => (
+            <option key={category.id} value={category.name}>{category.name}</option>
+          ))}
+        </select>
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value)}
+          className="p-2 border rounded"
+        >
+          <option value="end_date">Trier par date de fin</option>
+          <option value="alphabet">Trier par ordre alphabétique</option>
+        </select>
+      </div>
 
       {isAddingGoal && (
         <form onSubmit={addGoal} className="mb-8 bg-white p-6 rounded-lg shadow">
@@ -189,16 +245,20 @@ export default function Goals() {
             placeholder="Description"
             value={newGoal.description}
             onChange={(e) => setNewGoal({ ...newGoal, description: e.target.value })}
-            className="w-full p-2 mb-4 border rounded"
+            className="w-full p-2 mb-4 border rounded resize-none"
             required
           />
-          <input
-            type="text"
-            placeholder="Catégorie"
+          <select
             value={newGoal.category}
             onChange={(e) => setNewGoal({ ...newGoal, category: e.target.value })}
             className="w-full p-2 mb-4 border rounded"
-          />
+            required
+          >
+            <option value="">Sélectionnez une catégorie</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.name}>{category.name}</option>
+            ))}
+          </select>
           <div className="flex space-x-4 mb-4">
             <div className="flex-1">
               <label className="block text-sm font-medium text-gray-700">Date de début</label>
@@ -207,6 +267,7 @@ export default function Goals() {
                 value={newGoal.start_date}
                 onChange={(e) => setNewGoal({ ...newGoal, start_date: e.target.value })}
                 className="w-full p-2 border rounded"
+                required
               />
             </div>
             <div className="flex-1">
@@ -216,6 +277,7 @@ export default function Goals() {
                 value={newGoal.end_date}
                 onChange={(e) => setNewGoal({ ...newGoal, end_date: e.target.value })}
                 className="w-full p-2 border rounded"
+                required
               />
             </div>
           </div>
@@ -263,7 +325,7 @@ export default function Goals() {
       )}
 
       <div className="space-y-6">
-        {goals.map((goal) => (
+        {filteredAndSortedGoals.map((goal) => (
           <div key={goal.id} className="bg-white p-6 rounded-lg shadow">
             {editingGoal?.id === goal.id ? (
               <form onSubmit={(e) => { e.preventDefault(); updateGoal(editingGoal); }} className="space-y-4">
@@ -276,14 +338,17 @@ export default function Goals() {
                 <textarea
                   value={editingGoal.description}
                   onChange={(e) => setEditingGoal({ ...editingGoal, description: e.target.value })}
-                  className="w-full p-2 border rounded"
+                  className="w-full p-2 border rounded resize-none"
                 />
-                <input
-                  type="text"
+                <select
                   value={editingGoal.category}
                   onChange={(e) => setEditingGoal({ ...editingGoal, category: e.target.value })}
                   className="w-full p-2 border rounded"
-                />
+                >
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.name}>{category.name}</option>
+                  ))}
+                </select>
                 <div className="flex space-x-4">
                   <div className="flex-1">
                     <label className="block text-sm font-medium text-gray-700">Date de début</label>
@@ -357,7 +422,7 @@ export default function Goals() {
                 <div className="flex justify-between items-center mb-4 text-sm text-gray-500">
                   <span>Début: {new Date(goal.start_date).toLocaleDateString()}</span>
                   <span>Fin: {new Date(goal.end_date).toLocaleDateString()}</span>
-                  </div>
+                </div>
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center space-x-2">
                     <span className="font-semibold">Progrès:</span>
