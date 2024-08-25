@@ -1,5 +1,3 @@
-// app/api/auth/callback/route.ts
-
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
@@ -23,7 +21,7 @@ export async function GET(request: Request) {
           const { data: uploadData, error: uploadError } = await supabase
             .storage
             .from('avatars')
-            .upload(`${data.user.id}.png`, avatarBlob, {
+            .upload(`${data.user.id}/avatar.png`, avatarBlob, {
               upsert: true
             })
 
@@ -37,6 +35,5 @@ export async function GET(request: Request) {
     }
   }
 
-  // Redirect to the dashboard after successful login
   return NextResponse.redirect(`${requestUrl.origin}/dashboard`)
 }

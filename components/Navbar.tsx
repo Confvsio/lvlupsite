@@ -6,48 +6,33 @@ import { useSupabaseClient, useUser } from '@supabase/auth-helpers-react'
 import { useRouter } from 'next/navigation'
 import { useState, useRef, useEffect } from 'react'
 
+const DEFAULT_AVATAR_URL = 'https://www.seekpng.com/png/detail/110-1100707_person-avatar-placeholder.png'
+
 export default function Navbar() {
   const supabase = useSupabaseClient()
   const router = useRouter()
   const user = useUser()
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [avatarUrl, setAvatarUrl] = useState<string>(DEFAULT_AVATAR_URL)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (user) {
       const fetchAvatar = async () => {
         try {
-          // First, try to get the avatar from Supabase storage
-          const { data } = supabase
+          const { data, error } = await supabase
             .storage
             .from('avatars')
-            .getPublicUrl(`${user.id}.png`)
+            .createSignedUrl(`${user.id}/avatar.png`, 60) // URL valid for 60 seconds
 
-          if (data?.publicUrl) {
-            const res = await fetch(data.publicUrl, { method: 'HEAD' })
-            if (res.ok) {
-              setAvatarUrl(data.publicUrl)
-              return
-            }
+          if (data?.signedUrl) {
+            setAvatarUrl(data.signedUrl)
+          } else {
+            setAvatarUrl(DEFAULT_AVATAR_URL)
           }
-
-          // If Supabase storage fails, try to use the Discord avatar
-          if (user.user_metadata?.avatar_url) {
-            const discordAvatarUrl = user.user_metadata.avatar_url
-            const res = await fetch(discordAvatarUrl, { method: 'HEAD' })
-            if (res.ok) {
-              setAvatarUrl(discordAvatarUrl)
-              return
-            }
-          }
-
-          // If both fail, set to the default avatar URL
-          setAvatarUrl('https://www.seekpng.com/png/detail/110-1100707_person-avatar-placeholder.png')
         } catch (error) {
           console.error('Error fetching avatar:', error)
-          // Set to the default avatar URL on error
-          setAvatarUrl('https://www.seekpng.com/png/detail/110-1100707_person-avatar-placeholder.png')
+          setAvatarUrl(DEFAULT_AVATAR_URL)
         }
       }
 
@@ -83,7 +68,7 @@ export default function Navbar() {
             className="flex items-center space-x-2 text-gray-800 hover:text-indigo-600 transition duration-300"
           >
             <Image 
-              src={avatarUrl || 'https://www.seekpng.com/png/detail/110-1100707_person-avatar-placeholder.png'} // Default avatar
+              src={avatarUrl}
               alt="Profile" 
               width={24} 
               height={24} 
