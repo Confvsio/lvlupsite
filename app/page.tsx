@@ -1,9 +1,34 @@
-'use client';
+'use client'
 
-import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react'
+import { motion } from 'framer-motion'
 
 export default function Home() {
+  const session = useSession()
+  const supabase = useSupabaseClient()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (session) {
+      router.push('/dashboard')
+    }
+  }, [session, router])
+
+  const handleLogin = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: 'discord',
+      options: {
+        redirectTo: `${window.location.origin}/api/auth/discord`
+      }
+    })
+  }
+
+  if (session) {
+    return null // or a loading spinner
+  }
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-4 sm:p-8 md:p-16 lg:p-24 bg-gradient-to-br from-blue-50 to-indigo-100">
       <motion.div
@@ -19,13 +44,13 @@ export default function Home() {
           Rejoignez notre communauté Discord et améliorez votre développement
           personnel et professionnel grâce à nos outils et ressources.
         </p>
-        <Link 
-  href="/login" 
-  className="relative inline-block text-white font-bold py-3 px-6 rounded-full overflow-hidden transition duration-300 ease-in-out transform shadow-lg animated-gradient-btn"
->
-  <span className="relative z-10">Se connecter avec Discord</span>
-</Link>
+        <button 
+          onClick={handleLogin}
+          className="relative inline-block text-white font-bold py-3 px-6 rounded-full overflow-hidden transition duration-300 ease-in-out transform shadow-lg animated-gradient-btn"
+        >
+          <span className="relative z-10">Se connecter avec Discord</span>
+        </button>
       </motion.div>
     </main>
-  );
+  )
 }
