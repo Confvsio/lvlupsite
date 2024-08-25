@@ -1,44 +1,16 @@
 'use client'
 
 import Link from 'next/link'
-import Image from 'next/image'
 import { useSupabaseClient, useUser } from '@supabase/auth-helpers-react'
 import { useRouter } from 'next/navigation'
 import { useState, useRef, useEffect } from 'react'
-
-const DEFAULT_AVATAR_URL = 'https://www.seekpng.com/png/detail/110-1100707_person-avatar-placeholder.png'
 
 export default function Navbar() {
   const supabase = useSupabaseClient()
   const router = useRouter()
   const user = useUser()
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
-  const [avatarUrl, setAvatarUrl] = useState<string>(DEFAULT_AVATAR_URL)
   const dropdownRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (user) {
-      const fetchAvatar = async () => {
-        try {
-          const { data, error } = await supabase
-            .storage
-            .from('avatars')
-            .createSignedUrl(`${user.id}/avatar.png`, 60) // URL valid for 60 seconds
-
-          if (data?.signedUrl) {
-            setAvatarUrl(data.signedUrl)
-          } else {
-            setAvatarUrl(DEFAULT_AVATAR_URL)
-          }
-        } catch (error) {
-          console.error('Error fetching avatar:', error)
-          setAvatarUrl(DEFAULT_AVATAR_URL)
-        }
-      }
-
-      fetchAvatar()
-    }
-  }, [user, supabase])
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -67,14 +39,11 @@ export default function Navbar() {
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
             className="flex items-center space-x-2 text-gray-800 hover:text-indigo-600 transition duration-300"
           >
-            <Image 
-              src={avatarUrl}
-              alt="Profile" 
-              width={24} 
-              height={24} 
-              className="rounded-full"
-            />
-            <span>Profil</span>
+            {user ? (
+              <span>{user.user_metadata?.user_name || 'Utilisateur'}</span> // Display Discord username
+            ) : (
+              <span>Profil</span>
+            )}
           </button>
           {isDropdownOpen && (
             <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
