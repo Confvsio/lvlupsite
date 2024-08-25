@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useUser } from '@supabase/auth-helpers-react'
+import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react'
 import Link from 'next/link'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
@@ -24,17 +24,41 @@ const habitData = [
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28']
 
+type Goal = {
+  id: number
+  title: string
+  progress: number
+}
+
 export default function Dashboard() {
   const user = useUser()
+  const supabase = useSupabaseClient()
   const [username, setUsername] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [goals, setGoals] = useState<Goal[]>([])
 
   useEffect(() => {
     if (user) {
       setUsername(user.user_metadata.username || null)
-      setIsLoading(false)
+      fetchGoals()
     }
   }, [user])
+
+  async function fetchGoals() {
+    const { data, error } = await supabase
+      .from('goals')
+      .select('id, title, progress')
+      .eq('user_id', user?.id)
+      .order('created_at', { ascending: false })
+      .limit(5)
+
+    if (error) {
+      console.error('Error fetching goals:', error)
+    } else {
+      setGoals(data || [])
+    }
+    setIsLoading(false)
+  }
 
   if (isLoading) {
     return <LoadingSpinner />
@@ -53,8 +77,8 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <DashboardCard title="Objectifs en cours">
-          <p className="text-3xl font-bold text-indigo-600">3</p>
-          <p className="text-gray-600">sur 5 objectifs totaux</p>
+          <p className="text-3xl font-bold text-indigo-600">{goals.length}</p>
+          <p className="text-gray-600">objectifs récents</p>
         </DashboardCard>
 
         <DashboardCard title="Niveau">
@@ -117,14 +141,15 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <DashboardCard title="Objectifs">
+        <DashboardCard title="Objectifs Récents">
           <div className="space-y-4">
-            <ProgressBar label="Méditation quotidienne" progress={70} />
-            <ProgressBar label="Lecture" progress={45} />
-            <ProgressBar label="Exercice physique" progress={60} />
-            <ProgressBar label="Apprentissage d'une langue" progress={30} />
-            <ProgressBar label="Écriture créative" progress={80} />
+            {goals.map((goal) => (
+              <ProgressBar key={goal.id} label={goal.title} progress={goal.progress} />
+            ))}
           </div>
+          <Link href="/goals" className="text-indigo-600 hover:underline mt-4 inline-block">
+            Voir tous les objectifs
+          </Link>
         </DashboardCard>
 
         <DashboardCard title="Habitudes Récentes">
