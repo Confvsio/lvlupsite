@@ -4,40 +4,45 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useSupabaseClient, useUser } from '@supabase/auth-helpers-react'
 import { useRouter } from 'next/navigation'
-import { motion } from 'framer-motion'
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 export default function Navbar() {
   const supabase = useSupabaseClient()
   const router = useRouter()
   const user = useUser()
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.push('/')
   }
 
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [dropdownRef])
+
   return (
-    <motion.nav 
-      initial={{ opacity: 0, y: -20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="flex justify-between items-center p-4 bg-white shadow-md"
-    >
+    <nav className="flex justify-between items-center p-4 bg-white border-b border-gray-200">
       <Link href="/dashboard" className="font-bold text-xl text-gray-800 hover:text-indigo-600 transition duration-300">Lvl'Up</Link>
       <div className="flex items-center space-x-4">
         <NavLink href="/dashboard">Tableau de bord</NavLink>
         <NavLink href="/goals">Objectifs</NavLink>
         <NavLink href="/habits">Habitudes</NavLink>
-        <div className="relative">
+        <div className="relative" ref={dropdownRef}>
           <button 
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
             className="flex items-center space-x-2 text-gray-800 hover:text-indigo-600 transition duration-300"
           >
             {user?.user_metadata?.avatar_url && (
               <Image 
-                src={user.user_metadata.avatar_url} 
+                src={`https://wizqmmmrnjgbiismfswx.supabase.co/storage/v1/object/public/avatars/${user.user_metadata.avatar_url}`}
                 alt="Profile" 
                 width={24} 
                 height={24} 
@@ -64,8 +69,7 @@ export default function Navbar() {
           )}
         </div>
       </div>
-      <div className="border-b border-gray-300 w-full mt-2"></div>
-    </motion.nav>
+    </nav>
   )
 }
 
@@ -73,7 +77,7 @@ function NavLink({ href, children }: { href: string, children: React.ReactNode }
   return (
     <Link 
       href={href} 
-      className="text-gray-800 hover:text-indigo-600 transition duration-300 px-3 py-2 rounded-full"
+      className="text-gray-800 hover:text-indigo-600 transition duration-300"
     >
       {children}
     </Link>
