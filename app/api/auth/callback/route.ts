@@ -11,27 +11,19 @@ export async function GET(request: Request) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error && data?.user) {
-      const avatarUrl = data.user.user_metadata?.avatar_url
+      // Ensure we're capturing the Discord username
+      const discordUsername = data.user.user_metadata?.full_name || 
+                              data.user.user_metadata?.name ||
+                              data.user.user_metadata?.preferred_username
 
-      if (avatarUrl) {
-        try {
-          const avatarResponse = await fetch(avatarUrl)
-          const avatarBlob = await avatarResponse.blob()
-
-          const { data: uploadData, error: uploadError } = await supabase
-            .storage
-            .from('avatars')
-            .upload(`${data.user.id}/avatar.png`, avatarBlob, {
-              upsert: true
-            })
-
-          if (uploadError) {
-            console.error('Error uploading avatar:', uploadError)
-          }
-        } catch (error) {
-          console.error('Error fetching or uploading avatar:', error)
-        }
+      if (discordUsername) {
+        // Update the user metadata with the Discord username
+        await supabase.auth.updateUser({
+          data: { username: discordUsername }
+        })
       }
+
+      console.log('User data after login:', data.user) // For debugging
     }
   }
 

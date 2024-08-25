@@ -10,7 +10,22 @@ export default function Navbar() {
   const router = useRouter()
   const user = useUser()
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const [username, setUsername] = useState<string>('Profil')
   const dropdownRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (user) {
+      // Check different possible locations of the username in the user object
+      const discordUsername = user.user_metadata?.full_name || 
+                              user.user_metadata?.name ||
+                              user.user_metadata?.user_name ||
+                              user.user_metadata?.preferred_username ||
+                              'Utilisateur'
+      setUsername(discordUsername)
+      
+      console.log('User metadata:', user.user_metadata) // For debugging
+    }
+  }, [user])
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -39,11 +54,7 @@ export default function Navbar() {
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
             className="flex items-center space-x-2 text-gray-800 hover:text-indigo-600 transition duration-300"
           >
-            {user ? (
-              <span>{user.user_metadata?.user_name || 'Utilisateur'}</span> // Display Discord username
-            ) : (
-              <span>Profil</span>
-            )}
+            <span>{username}</span>
           </button>
           {isDropdownOpen && (
             <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
