@@ -1,5 +1,3 @@
-// app/api/auth/callback/route.ts
-
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
@@ -13,14 +11,13 @@ export async function GET(request: Request) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error && data?.user) {
-      // Check if the avatar URL is in the user metadata
-      const avatarUrl = data.user.user_metadata.avatar_url
+      const avatarUrl = data.user.user_metadata?.avatar_url
 
       if (avatarUrl) {
-        // Update the user metadata with the avatar URL
-        await supabase.auth.updateUser({
-          data: { avatar_url: avatarUrl }
-        })
+        // Store the avatar URL in the profiles table
+        await supabase
+          .from('profiles')
+          .upsert({ id: data.user.id, avatar_url: avatarUrl })
       }
     }
   }
