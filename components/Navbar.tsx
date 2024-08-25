@@ -18,28 +18,36 @@ export default function Navbar() {
     if (user) {
       const fetchAvatar = async () => {
         try {
+          // First, try to get the avatar from Supabase storage
           const { data } = supabase
             .storage
             .from('avatars')
             .getPublicUrl(`${user.id}.png`)
 
           if (data?.publicUrl) {
-            // Check if the image exists
             const res = await fetch(data.publicUrl, { method: 'HEAD' })
             if (res.ok) {
               setAvatarUrl(data.publicUrl)
-            } else {
-              // Fallback to Discord avatar if available
-              setAvatarUrl(user.user_metadata?.avatar_url || null)
+              return
             }
-          } else {
-            // Fallback to Discord avatar if available
-            setAvatarUrl(user.user_metadata?.avatar_url || null)
           }
+
+          // If Supabase storage fails, try to use the Discord avatar
+          if (user.user_metadata?.avatar_url) {
+            const discordAvatarUrl = user.user_metadata.avatar_url
+            const res = await fetch(discordAvatarUrl, { method: 'HEAD' })
+            if (res.ok) {
+              setAvatarUrl(discordAvatarUrl)
+              return
+            }
+          }
+
+          // If both fail, set to the default avatar URL
+          setAvatarUrl('https://www.seekpng.com/png/detail/110-1100707_person-avatar-placeholder.png')
         } catch (error) {
           console.error('Error fetching avatar:', error)
-          // Fallback to Discord avatar if available
-          setAvatarUrl(user.user_metadata?.avatar_url || null)
+          // Set to the default avatar URL on error
+          setAvatarUrl('https://www.seekpng.com/png/detail/110-1100707_person-avatar-placeholder.png')
         }
       }
 
@@ -74,15 +82,13 @@ export default function Navbar() {
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
             className="flex items-center space-x-2 text-gray-800 hover:text-indigo-600 transition duration-300"
           >
-            {avatarUrl && (
-              <Image 
-                src={avatarUrl}
-                alt="Profile" 
-                width={24} 
-                height={24} 
-                className="rounded-full"
-              />
-            )}
+            <Image 
+              src={avatarUrl || 'https://www.seekpng.com/png/detail/110-1100707_person-avatar-placeholder.png'} // Default avatar
+              alt="Profile" 
+              width={24} 
+              height={24} 
+              className="rounded-full"
+            />
             <span>Profil</span>
           </button>
           {isDropdownOpen && (
