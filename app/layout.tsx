@@ -2,9 +2,7 @@ import './globals.css'
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import SupabaseProvider from './supabase-provider'
-import Navbar from '../components/Navbar'
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import NavbarWrapper from '../components/NavbarWrapper'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -13,19 +11,16 @@ export const metadata: Metadata = {
   description: 'Plateforme de développement personnel et professionnel',
 }
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const supabase = createServerComponentClient({ cookies })
-  const { data: { session } } = await supabase.auth.getSession()
-
   return (
     <html lang="fr">
       <body className={inter.className}>
         <SupabaseProvider>
-          {session && <Navbar />}
+          <NavbarWrapper />
           {children}
         </SupabaseProvider>
       </body>
