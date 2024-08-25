@@ -17,12 +17,17 @@ export default function Home() {
   }, [session, router])
 
   const handleLogin = async () => {
-    await supabase.auth.signInWithOAuth({
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: 'discord',
       options: {
-        redirectTo: `${window.location.origin}/api/auth/discord`
+        redirectTo: `${window.location.origin}/api/auth/callback`,
+        scopes: 'identify email',
       }
     })
+
+    if (error) {
+      console.error('Error logging in:', error)
+    }
   }
 
   if (session) {

@@ -42,7 +42,7 @@ export default function Navbar() {
           >
             {user?.user_metadata?.avatar_url && (
               <Image 
-                src={`https://wizqmmmrnjgbiismfswx.supabase.co/storage/v1/object/public/avatars/${user.user_metadata.avatar_url}`}
+                src={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/avatars/${user.user_metadata.avatar_url}`}
                 alt="Profile" 
                 width={24} 
                 height={24} 
