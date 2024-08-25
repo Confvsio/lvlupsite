@@ -10,11 +10,12 @@ export default function Navbar() {
   const router = useRouter()
   const user = useUser()
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
-  const [username, setUsername] = useState<string>('Profil')
+  const [username, setUsername] = useState<string>('Profil') // Default to "Profil"
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (user) {
+      // Retrieve the username from user metadata
       const discordUsername = user.user_metadata?.username || 'Profil'
       setUsername(discordUsername)
     }
