@@ -1,7 +1,6 @@
 import './globals.css'
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
-import { PT_Sans } from 'next/font/google'
+import { Roboto_Slab } from 'next/font/google'
 import SupabaseProvider from './supabase-provider'
 import NavbarWrapper from '../components/NavbarWrapper'
 
@@ -13,11 +12,10 @@ export const metadata: Metadata = {
   },
 }
 
-import { Roboto_Slab } from 'next/font/google'
-
-const inter = Inter({ subsets: ['latin'] })
-
-const robotoSlab = Roboto_Slab({ subsets: ['latin'] })
+const robotoSlab = Roboto_Slab({ 
+  subsets: ['latin'],
+  variable: '--font-roboto-slab',
+})
 
 export default function RootLayout({
   children,
@@ -25,11 +23,11 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="fr" className={robotoSlab.className}>
+    <html lang="fr" className={robotoSlab.variable}>
       <head>
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
       </head>
-      <body className={`${inter.className} bg-cyan-15`}>
+      <body className="bg-gray-50 font-sans">
         <SupabaseProvider>
           <NavbarWrapper />
           {children}
