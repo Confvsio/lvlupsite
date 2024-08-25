@@ -30,17 +30,27 @@ type Goal = {
   progress: number
 }
 
+type Habit = {
+  id: number
+  title: string
+  current_streak: number
+  longest_streak: number
+  last_completed: string | null
+}
+
 export default function Dashboard() {
   const user = useUser()
   const supabase = useSupabaseClient()
   const [username, setUsername] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [goals, setGoals] = useState<Goal[]>([])
+  const [habits, setHabits] = useState<Habit[]>([])
 
   useEffect(() => {
     if (user) {
       setUsername(user.user_metadata.username || null)
       fetchGoals()
+      fetchHabits()
     }
   }, [user])
 
@@ -56,6 +66,21 @@ export default function Dashboard() {
       console.error('Error fetching goals:', error)
     } else {
       setGoals(data || [])
+    }
+  }
+
+  async function fetchHabits() {
+    const { data, error } = await supabase
+      .from('habits')
+      .select('id, title, current_streak, longest_streak, last_completed')
+      .eq('user_id', user?.id)
+      .order('current_streak', { ascending: false })
+      .limit(5)
+
+    if (error) {
+      console.error('Error fetching habits:', error)
+    } else {
+      setHabits(data || [])
     }
     setIsLoading(false)
   }
@@ -91,9 +116,9 @@ export default function Dashboard() {
           </div>
         </DashboardCard>
 
-        <DashboardCard title="Habitudes suivies">
-          <p className="text-3xl font-bold text-indigo-600">8</p>
-          <p className="text-gray-600">sur 10 habitudes totales</p>
+        <DashboardCard title="Habitudes actives">
+          <p className="text-3xl font-bold text-indigo-600">{habits.length}</p>
+          <p className="text-gray-600">habitudes suivies</p>
         </DashboardCard>
       </div>
 
@@ -154,14 +179,16 @@ export default function Dashboard() {
 
         <DashboardCard title="Habitudes Récentes">
           <ul className="space-y-2">
-            <HabitItem label="Méditation matinale" status="completed" />
-            <HabitItem label="Lecture avant le coucher" status="completed" />
-            <HabitItem label="Exercice quotidien" status="missed" />
-            <HabitItem label="Pratique de langue" status="completed" />
-            <HabitItem label="Journaling" status="pending" />
-            <HabitItem label="Boire 2L d'eau" status="completed" />
-            <HabitItem label="Planification de la journée" status="pending" />
+            {habits.map((habit) => (
+              <li key={habit.id} className="flex justify-between items-center">
+                <span>{habit.title}</span>
+                <span className="text-indigo-600 font-semibold">{habit.current_streak} jours</span>
+              </li>
+            ))}
           </ul>
+          <Link href="/habits" className="text-indigo-600 hover:underline mt-4 inline-block">
+            Voir toutes les habitudes
+          </Link>
         </DashboardCard>
       </div>
     </div>
@@ -190,20 +217,5 @@ function ProgressBar({ label, progress }: { label: string, progress: number }) {
         <div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: `${progress}%` }}></div>
       </div>
     </div>
-  )
-}
-
-function HabitItem({ label, status }: { label: string, status: 'completed' | 'missed' | 'pending' }) {
-  const statusColors = {
-    completed: 'bg-green-500',
-    missed: 'bg-red-500',
-    pending: 'bg-yellow-500'
-  }
-
-  return (
-    <li className="flex items-center justify-between">
-      <span>{label}</span>
-      <span className={`w-3 h-3 ${statusColors[status]} rounded-full`}></span>
-    </li>
   )
 }
