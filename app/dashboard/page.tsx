@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useUser } from '@supabase/auth-helpers-react'
 import Link from 'next/link'
+import LoadingSpinner from '@/components/LoadingSpinner'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 
 const weeklyData = [
@@ -26,15 +27,17 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28']
 export default function Dashboard() {
   const user = useUser()
   const [username, setUsername] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     if (user) {
       setUsername(user.user_metadata.username || null)
+      setIsLoading(false)
     }
   }, [user])
 
-  if (!user) {
-    return <div>Chargement...</div>
+  if (isLoading) {
+    return <LoadingSpinner />
   }
 
   return (
