@@ -17,7 +17,7 @@ export default function SetUsername() {
     setLoading(true)
 
     if (!username) {
-      setError('Please enter your Discord name.')
+      setError('Veuillez entrer votre nom Discord.')
       setLoading(false)
       return
     }
@@ -27,23 +27,23 @@ export default function SetUsername() {
     })
 
     if (updateError) {
-      setError('Error updating username: ' + updateError.message)
+      setError('Erreur lors de la mise à jour du nom : ' + updateError.message)
       setLoading(false)
     } else {
-      router.push('/dashboard') // Redirect to the dashboard after setting the username
+      router.push('/dashboard') // Rediriger vers le tableau de bord après avoir défini le nom
     }
   }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <form onSubmit={handleSubmit} className="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
-        <h2 className="text-2xl font-bold mb-4 text-center text-gray-800">Set Your Discord Name</h2>
+        <h2 className="text-2xl font-bold mb-4 text-center text-gray-800">Définissez votre nom Discord</h2>
         {error && <p className="text-red-500 mb-4">{error}</p>}
         <input
           type="text"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
-          placeholder="Enter your Discord name"
+          placeholder="Entrez votre nom Discord"
           className="border border-gray-300 p-3 rounded mb-4 w-full focus:outline-none focus:ring-2 focus:ring-indigo-500"
           required
         />
@@ -52,7 +52,7 @@ export default function SetUsername() {
           className={`bg-indigo-600 text-white py-2 px-4 rounded w-full transition duration-300 ease-in-out ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-indigo-700'}`}
           disabled={loading}
         >
-          {loading ? 'Setting...' : 'Submit'}
+          {loading ? 'Définition...' : 'Soumettre'}
         </button>
       </form>
     </div>
