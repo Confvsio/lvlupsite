@@ -19,12 +19,12 @@ export default function Home() {
           Rejoignez notre communauté Discord et améliorez votre développement
           personnel et professionnel grâce à nos outils et ressources.
         </p>
-        <Link
-          href="/login"
-          className="inline-block bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 sm:py-3 sm:px-6 rounded-full transition duration-300 ease-in-out transform hover:scale-105 shadow-lg text-sm sm:text-base"
-        >
-          Se connecter avec Discord
-        </Link>
+        <Link 
+  href="/login" 
+  className="relative inline-block text-white font-bold py-3 px-6 rounded-full overflow-hidden transition duration-300 ease-in-out transform shadow-lg animated-gradient-btn"
+>
+  <span className="relative z-10">Se connecter avec Discord</span>
+</Link>
       </motion.div>
     </main>
   );
