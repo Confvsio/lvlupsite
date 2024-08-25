@@ -19,17 +19,17 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6">Tableau de Bord</h1>
+    <div className="max-w-6xl mx-auto p-6">
+      <h1 className="text-4xl font-bold mb-6 text-center text-gray-800">Tableau de Bord</h1>
       
       {!username && (
-        <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6" role="alert">
+        <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded-md" role="alert">
           <p className="font-bold">Attention</p>
-          <p>Vous n'avez pas encore défini votre nom d'utilisateur. <Link href="/set-username" className="underline">Cliquez ici pour le définir</Link>.</p>
+          <p>Vous n'avez pas encore défini votre nom d'utilisateur. <Link href="/set-username" className="underline text-yellow-600 hover:text-yellow-800">Cliquez ici pour le définir</Link>.</p>
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         <DashboardCard title="Objectifs">
           <p>Vous n'avez pas encore défini d'objectifs.</p>
           <Link href="/goals" className="text-indigo-600 hover:underline">Définir des objectifs</Link>
@@ -55,9 +55,11 @@ export default function Dashboard() {
 
 function DashboardCard({ title, children }: { title: string, children: React.ReactNode }) {
   return (
-    <div className="bg-white shadow rounded-lg p-6">
-      <h2 className="text-xl font-semibold mb-4">{title}</h2>
-      {children}
+    <div className="bg-white shadow-lg rounded-lg p-6 transition-transform transform hover:scale-105">
+      <h2 className="text-xl font-semibold mb-4 text-gray-800">{title}</h2>
+      <div className="text-gray-600">
+        {children}
+      </div>
     </div>
   )
 }

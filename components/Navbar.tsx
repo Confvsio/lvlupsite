@@ -37,7 +37,7 @@ export default function Navbar() {
   }, [dropdownRef])
 
   return (
-    <nav className="flex justify-between items-center p-4 bg-white border-b border-gray-200">
+    <nav className="flex justify-between items-center p-4 bg-white border-b border-gray-200 bg-cyan-15">
       <Link href="/dashboard" className="font-bold text-xl text-gray-800 hover:text-indigo-600 transition duration-300">Lvl'Up</Link>
       <div className="flex items-center space-x-4">
         <NavLink href="/dashboard">Tableau de bord</NavLink>

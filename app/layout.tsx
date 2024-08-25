@@ -29,7 +29,7 @@ export default function RootLayout({
       <head>
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
       </head>
-      <body className={`${inter.className} bg-cyan-50`}>
+      <body className={`${inter.className} bg-cyan-15`}>
         <SupabaseProvider>
           <NavbarWrapper />
           {children}
