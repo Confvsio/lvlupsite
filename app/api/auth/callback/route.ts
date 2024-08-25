@@ -14,10 +14,23 @@ export async function GET(request: Request) {
       const avatarUrl = data.user.user_metadata?.avatar_url
 
       if (avatarUrl) {
-        // Store the avatar URL in the profiles table
-        await supabase
-          .from('profiles')
-          .upsert({ id: data.user.id, avatar_url: avatarUrl })
+        try {
+          const avatarResponse = await fetch(avatarUrl)
+          const avatarBlob = await avatarResponse.blob()
+
+          const { data: uploadData, error: uploadError } = await supabase
+            .storage
+            .from('avatars')
+            .upload(`${data.user.id}.png`, avatarBlob, {
+              upsert: true
+            })
+
+          if (uploadError) {
+            console.error('Error uploading avatar:', uploadError)
+          }
+        } catch (error) {
+          console.error('Error fetching or uploading avatar:', error)
+        }
       }
     }
   }
