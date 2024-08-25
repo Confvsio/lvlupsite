@@ -41,14 +41,14 @@ export default function Navbar() {
             className="flex items-center space-x-2 text-gray-800 hover:text-indigo-600 transition duration-300"
           >
             {user?.user_metadata?.avatar_url && (
-              <Image 
-                src={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/avatars/${user.user_metadata.avatar_url}`}
-                alt="Profile" 
-                width={24} 
-                height={24} 
-                className="rounded-full"
-              />
-            )}
+  <Image 
+    src={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/avatars/${user.user_metadata.avatar_url}`}
+    alt="Profile" 
+    width={24} 
+    height={24} 
+    className="rounded-full"
+  />
+)}
             <span>Profil</span>
           </button>
           {isDropdownOpen && (

@@ -17,7 +17,7 @@ export default function Home() {
   }, [session, router])
 
   const handleLogin = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'discord',
       options: {
         redirectTo: `${window.location.origin}/api/auth/callback`,
@@ -27,6 +27,9 @@ export default function Home() {
 
     if (error) {
       console.error('Error logging in:', error)
+    } else if (data) {
+      console.log('Login successful, redirecting...')
+      // The actual redirection will be handled by the callback
     }
   }
 
