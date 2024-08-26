@@ -10,7 +10,9 @@ import { FaTrophy, FaChartLine, FaCalendarCheck, FaDiscord } from 'react-icons/f
 type Goal = {
   id: number
   title: string
-  progress: number
+  metric_type: 'percentage' | 'number' | 'boolean' | 'time'
+  current_value: number
+  target_value: number
 }
 
 type Habit = {
@@ -44,7 +46,7 @@ export default function Dashboard() {
     try {
       const { data, error } = await supabase
         .from('goals')
-        .select('id, title, progress')
+        .select('id, title, metric_type, current_value, target_value')
         .eq('user_id', user?.id)
         .order('created_at', { ascending: false })
         .limit(5)
@@ -90,6 +92,11 @@ export default function Dashboard() {
     { name: 'Non commencées', value: habits.filter(h => !h.last_completed).length },
   ]
 
+  const goalProgress = goals.map(goal => ({
+    title: goal.title,
+    progress: (goal.current_value / goal.target_value) * 100
+  }))
+
   return (
     <div className="max-w-7xl mx-auto p-6 bg-gray-50">
       <h1 className="text-4xl font-bold mb-8 text-gray-800 text-center">Tableau de Bord</h1>
@@ -133,7 +140,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <DashboardCard title="Progrès Hebdomadaire">
           <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={goals}>
+            <LineChart data={goalProgress}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="title" />
               <YAxis />
@@ -176,8 +183,8 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <DashboardCard title="Objectifs Récents">
           <div className="space-y-4">
-            {goals.map((goal) => (
-              <ProgressBar key={goal.id} label={goal.title} progress={goal.progress} />
+            {goalProgress.map((goal) => (
+              <ProgressBar key={goal.title} label={goal.title} progress={goal.progress} />
             ))}
           </div>
           <Link href="/goals" className="text-indigo-600 hover:underline mt-4 inline-block">
@@ -199,17 +206,18 @@ export default function Dashboard() {
           </Link>
         </DashboardCard>
       </div>
-        <div className="flex justify-center">
-          <iframe 
-            src="https://discordapp.com/widget?id=1260571847636811786&theme=dark" 
-            width="70%" 
-            height="500" 
-            className="max-w-[350px]"
-            allowTransparency={true} 
-            frameBorder="0" 
-            sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"
-          ></iframe>
-        </div>
+
+      <div className="flex justify-center">
+        <iframe 
+          src="https://discordapp.com/widget?id=1260571847636811786&theme=dark" 
+          width="70%" 
+          height="500" 
+          className="max-w-[350px]"
+          allowTransparency={true} 
+          frameBorder="0" 
+          sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"
+        ></iframe>
+      </div>
     </div>
   )
 }
@@ -233,7 +241,7 @@ function ProgressBar({ label, progress }: { label: string, progress: number }) {
     <div>
       <div className="flex justify-between mb-1">
         <span className="text-sm font-medium text-indigo-700">{label}</span>
-        <span className="text-sm font-medium text-indigo-700">{progress}%</span>
+        <span className="text-sm font-medium text-indigo-700">{progress.toFixed(1)}%</span>
       </div>
       <div className="w-full bg-gray-200 rounded-full h-2.5">
         <div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: `${progress}%` }}></div>
