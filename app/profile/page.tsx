@@ -30,16 +30,28 @@ type AnalyticsData = {
 type Goal = {
   id: number
   title: string
-  progress: number
+  description: string
   category: string
+  current_value: number
+  target_value: number
+  progress: number
   target_date: string
 }
 
 type Habit = {
   id: number
   title: string
-  current_streak: number
+  description: string
   category: string
+  frequency: 'daily' | 'weekly' | 'monthly'
+  current_streak: number
+  longest_streak: number
+  last_completed: string | null
+}
+
+type AchievementCriteria = {
+  type: 'goals_completed' | 'habits_streak' | 'xp_gained'
+  count: number
 }
 
 type Achievement = {
@@ -48,6 +60,7 @@ type Achievement = {
   description: string
   icon: string
   earned: boolean
+  criteria: AchievementCriteria
 }
 
 type ActivityItem = {
@@ -81,6 +94,12 @@ export default function ProfilePage() {
     }
   }, [user])
 
+  useEffect(() => {
+    if (profile && goals.length > 0 && habits.length > 0) {
+      checkAchievements(goals, habits, profile)
+    }
+  }, [profile, goals, habits])
+
   async function fetchProfile() {
     const { data, error } = await supabase
       .from('profiles')
@@ -89,7 +108,7 @@ export default function ProfilePage() {
       .single()
 
     if (error) {
-      console.error('Error fetching profile:', error)
+      console.error('Erreur lors de la récupération du profil:', error)
     } else {
       setProfile(data)
       setEditedProfile(data)
@@ -99,38 +118,23 @@ export default function ProfilePage() {
 
   async function fetchAnalyticsData() {
     // Fetch analytics data from Supabase
-    // This is a placeholder and should be replaced with actual data fetching
-    const data: AnalyticsData = {
-      totalGoals: 10,
-      completedGoals: 5,
-      totalHabits: 8,
-      activeHabits: 6,
-      longestStreak: 14,
-      xpHistory: [
-        { date: '2023-01-01', xp: 100 },
-        { date: '2023-02-01', xp: 250 },
-        { date: '2023-03-01', xp: 400 },
-        { date: '2023-04-01', xp: 600 },
-      ],
-      categoryCompletion: [
-        { category: 'Fitness', completed: 3, total: 5 },
-        { category: 'Learning', completed: 2, total: 3 },
-        { category: 'Finance', completed: 1, total: 2 },
-      ],
+    const { data, error } = await supabase.rpc('get_user_analytics', { user_id: user?.id })
+    if (error) {
+      console.error('Erreur lors de la récupération des données analytiques:', error)
+    } else {
+      setAnalyticsData(data)
     }
-    setAnalyticsData(data)
   }
 
   async function fetchGoals() {
     const { data, error } = await supabase
       .from('goals')
-      .select('id, title, current_value, target_value, category, target_date')
+      .select('*')
       .eq('user_id', user?.id)
       .order('target_date', { ascending: true })
-      .limit(5)
 
     if (error) {
-      console.error('Error fetching goals:', error)
+      console.error('Erreur lors de la récupération des objectifs:', error)
     } else {
       setGoals(data.map(goal => ({
         ...goal,
@@ -142,38 +146,43 @@ export default function ProfilePage() {
   async function fetchHabits() {
     const { data, error } = await supabase
       .from('habits')
-      .select('id, title, current_streak, category')
+      .select('*')
       .eq('user_id', user?.id)
       .order('current_streak', { ascending: false })
-      .limit(5)
 
     if (error) {
-      console.error('Error fetching habits:', error)
+      console.error('Erreur lors de la récupération des habitudes:', error)
     } else {
       setHabits(data)
     }
   }
 
   async function fetchAchievements() {
-    // Fetch achievements from Supabase
-    // This is a placeholder and should be replaced with actual data fetching
-    const data: Achievement[] = [
-      { id: 1, title: 'Goal Setter', description: 'Set your first goal', icon: '🎯', earned: true },
-      { id: 2, title: 'Habit Former', description: 'Create your first habit', icon: '🔁', earned: true },
-      { id: 3, title: 'Streak Master', description: 'Maintain a 7-day streak', icon: '🔥', earned: false },
-    ]
-    setAchievements(data)
+    const { data, error } = await supabase
+      .from('achievements')
+      .select('*')
+      .eq('user_id', user?.id)
+
+    if (error) {
+      console.error('Erreur lors de la récupération des succès:', error)
+    } else {
+      setAchievements(data)
+    }
   }
 
   async function fetchActivityFeed() {
-    // Fetch activity feed from Supabase
-    // This is a placeholder and should be replaced with actual data fetching
-    const data: ActivityItem[] = [
-      { id: 1, type: 'goal_created', content: 'Created a new goal: "Read 12 books this year"', timestamp: '2023-04-01T10:00:00Z' },
-      { id: 2, type: 'habit_streak', content: 'Achieved a 7-day streak for "Daily Meditation"', timestamp: '2023-03-28T09:30:00Z' },
-      { id: 3, type: 'achievement_earned', content: 'Earned the "Goal Setter" achievement', timestamp: '2023-03-25T14:15:00Z' },
-    ]
-    setActivityFeed(data)
+    const { data, error } = await supabase
+      .from('activity_feed')
+      .select('*')
+      .eq('user_id', user?.id)
+      .order('timestamp', { ascending: false })
+      .limit(10)
+
+    if (error) {
+      console.error('Erreur lors de la récupération de l\'activité récente:', error)
+    } else {
+      setActivityFeed(data)
+    }
   }
 
   async function updateProfile() {
@@ -188,10 +197,56 @@ export default function ProfilePage() {
       .eq('id', user?.id)
 
     if (error) {
-      console.error('Error updating profile:', error)
+      console.error('Erreur lors de la mise à jour du profil:', error)
     } else {
       setProfile(editedProfile)
       setIsEditing(false)
+    }
+  }
+
+  function checkAchievements(goals: Goal[], habits: Habit[], profile: UserProfile) {
+    const updatedAchievements = achievements.map(achievement => {
+      let earned = achievement.earned;
+      if (!earned) {
+        switch (achievement.criteria.type) {
+          case 'goals_completed':
+            earned = goals.filter(goal => goal.progress === 100).length >= achievement.criteria.count;
+            break;
+          case 'habits_streak':
+            earned = habits.some(habit => habit.current_streak >= achievement.criteria.count);
+            break;
+          case 'xp_gained':
+            earned = profile.xp >= achievement.criteria.count;
+            break;
+        }
+      }
+      return { ...achievement, earned };
+    });
+
+    setAchievements(updatedAchievements);
+
+    // Check for newly earned achievements and add to activity feed
+    updatedAchievements.forEach(achievement => {
+      if (achievement.earned && !achievements.find(a => a.id === achievement.id)?.earned) {
+        addToActivityFeed({
+          type: 'achievement_earned',
+          content: `Succès "${achievement.title}" obtenu !`,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    });
+  }
+
+  async function addToActivityFeed(activity: Omit<ActivityItem, 'id'>) {
+    const { data, error } = await supabase
+      .from('activity_feed')
+      .insert({ ...activity, user_id: user?.id })
+      .select()
+
+    if (error) {
+      console.error('Erreur lors de l\'ajout à l\'activité récente:', error)
+    } else if (data) {
+      setActivityFeed(prevFeed => [data[0], ...prevFeed].slice(0, 10))
     }
   }
 
@@ -242,7 +297,7 @@ function UserInfoSection({ profile, isEditing, editedProfile, setEditedProfile, 
         <div className="flex items-center">
           <img 
             src={profile.avatar_url || '/default-avatar.png'} 
-            alt="Profile" 
+            alt="Profil" 
             className="w-20 h-20 rounded-full mr-4"
           />
           <div>
@@ -359,7 +414,7 @@ function AnalyticsDashboard({ analyticsData }: { analyticsData: AnalyticsData | 
                 {habitData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
-              </Pie>
+                              </Pie>
               <Tooltip />
             </PieChart>
           </ResponsiveContainer>
@@ -403,7 +458,7 @@ function GoalsOverview({ goals }: { goals: Goal[] }) {
     <div className="bg-white shadow rounded-lg p-6">
       <h2 className="text-xl font-semibold mb-4">Aperçu des Objectifs</h2>
       <div className="space-y-4">
-        {goals.map(goal => (
+        {goals.slice(0, 5).map(goal => (
           <div key={goal.id} className="flex items-center justify-between">
             <div>
               <h3 className="font-medium">{goal.title}</h3>
@@ -430,11 +485,11 @@ function HabitsOverview({ habits }: { habits: Habit[] }) {
     <div className="bg-white shadow rounded-lg p-6">
       <h2 className="text-xl font-semibold mb-4">Aperçu des Habitudes</h2>
       <div className="space-y-4">
-        {habits.map(habit => (
+        {habits.slice(0, 5).map(habit => (
           <div key={habit.id} className="flex items-center justify-between">
             <div>
               <h3 className="font-medium">{habit.title}</h3>
-              <p className="text-sm text-gray-500">{habit.category}</p>
+              <p className="text-sm text-gray-500">{habit.category} - {habit.frequency}</p>
             </div>
             <div className="text-right">
               <p className="font-semibold text-indigo-600">{habit.current_streak} jours</p>
