@@ -37,6 +37,7 @@ export default function Goals() {
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null)
   const [filter, setFilter] = useState<string>('all')
   const [sort, setSort] = useState<string>('target_date')
+  const [newCategory, setNewCategory] = useState('')
 
   useEffect(() => {
     if (user) {
@@ -108,227 +109,282 @@ export default function Goals() {
       setGoals(goals.map(g => g.id === goal.id ? goal : g))
       setEditingGoal(null)
     }
-}
-
-async function deleteGoal(id: number) {
-  const { error } = await supabase
-    .from('goals')
-    .delete()
-    .eq('id', id)
-
-  if (error) {
-    console.error('Error deleting goal:', error)
-  } else {
-    setGoals(goals.filter(goal => goal.id !== id))
   }
-}
 
-const filteredAndSortedGoals = goals
-  .filter(goal => filter === 'all' || goal.category === filter)
-  .sort((a, b) => {
-    if (sort === 'alphabet') {
-      return a.title.localeCompare(b.title)
-    } else if (sort === 'target_date') {
-      return new Date(a.target_date).getTime() - new Date(b.target_date).getTime()
-    } else if (sort === 'progress') {
-      return b.progress - a.progress
+  async function deleteGoal(id: number) {
+    const { error } = await supabase
+      .from('goals')
+      .delete()
+      .eq('id', id)
+
+    if (error) {
+      console.error('Error deleting goal:', error)
+    } else {
+      setGoals(goals.filter(goal => goal.id !== id))
     }
-    return 0
-  })
+  }
 
-if (isLoading) {
-  return <LoadingSpinner />
-}
+  async function addCategory() {
+    if (!newCategory.trim()) return
 
-return (
-  <div className="max-w-4xl mx-auto p-4">
-    <h1 className="text-3xl font-bold mb-6 text-center text-gray-800">Mes Objectifs</h1>
+    const { data, error } = await supabase
+      .from('categories')
+      .insert([{ name: newCategory.trim() }])
+      .select()
 
-    <button
-      onClick={() => setIsAddingGoal(true)}
-      className="mb-6 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition duration-300 ease-in-out flex items-center"
-    >
-      <PlusIcon className="h-5 w-5 mr-2" />
-      Ajouter un nouvel objectif
-    </button>
+    if (error) {
+      console.error('Error adding category:', error)
+    } else if (data) {
+      setCategories([...categories, ...data])
+      setNewCategory('')
+    }
+  }
 
-    <div className="mb-6 flex flex-wrap gap-4">
-      <select
-        value={filter}
-        onChange={(e) => setFilter(e.target.value)}
-        className="p-2 border rounded-lg bg-white shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+  const filteredAndSortedGoals = goals
+    .filter(goal => filter === 'all' || goal.category === filter)
+    .sort((a, b) => {
+      if (sort === 'alphabet') {
+        return a.title.localeCompare(b.title)
+      } else if (sort === 'target_date') {
+        return new Date(a.target_date).getTime() - new Date(b.target_date).getTime()
+      } else if (sort === 'progress') {
+        return b.progress - a.progress
+      }
+      return 0
+    })
+
+  if (isLoading) {
+    return <LoadingSpinner />
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto p-4">
+      <h1 className="text-3xl font-bold mb-6 text-center text-gray-800">Mes Objectifs</h1>
+
+      <button
+        onClick={() => setIsAddingGoal(true)}
+        className="mb-6 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition duration-300 ease-in-out flex items-center"
       >
-        <option value="all">Toutes les catégories</option>
-        {categories.map((category) => (
-          <option key={category.id} value={category.name}>{category.name}</option>
-        ))}
-      </select>
-      <select
-        value={sort}
-        onChange={(e) => setSort(e.target.value)}
-        className="p-2 border rounded-lg bg-white shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-      >
-        <option value="target_date">Trier par date cible</option>
-        <option value="alphabet">Trier par ordre alphabétique</option>
-        <option value="progress">Trier par progrès</option>
-      </select>
-    </div>
+        <PlusIcon className="h-5 w-5 mr-2" />
+        Ajouter un nouvel objectif
+      </button>
 
-    {isAddingGoal && (
-      <form onSubmit={addGoal} className="mb-8 bg-white p-6 rounded-lg shadow-md">
-        <h2 className="text-xl font-semibold mb-4 text-gray-800">Ajouter un nouvel objectif</h2>
-        <input
-          type="text"
-          placeholder="Titre de l'objectif"
-          value={newGoal.title}
-          onChange={(e) => setNewGoal({ ...newGoal, title: e.target.value })}
-          className="w-full p-2 mb-4 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-          required
-        />
-        <textarea
-          placeholder="Description"
-          value={newGoal.description}
-          onChange={(e) => setNewGoal({ ...newGoal, description: e.target.value })}
-          className="w-full p-2 mb-4 border rounded-lg resize-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-          rows={3}
-        />
+      <div className="mb-6 flex flex-wrap gap-4">
         <select
-          value={newGoal.category}
-          onChange={(e) => setNewGoal({ ...newGoal, category: e.target.value })}
-          className="w-full p-2 mb-4 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-          required
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          className="p-2 border rounded-lg bg-white shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
         >
-          <option value="">Sélectionnez une catégorie</option>
+          <option value="all">Toutes les catégories</option>
           {categories.map((category) => (
             <option key={category.id} value={category.name}>{category.name}</option>
           ))}
         </select>
-        <div className="flex space-x-4 mb-4">
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Date cible</label>
-            <input
-              type="date"
-              value={newGoal.target_date}
-              onChange={(e) => setNewGoal({ ...newGoal, target_date: e.target.value })}
-              className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              required
-            />
-          </div>
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Progrès initial (%)</label>
-            <input
-              type="number"
-              value={newGoal.progress}
-              onChange={(e) => setNewGoal({ ...newGoal, progress: Number(e.target.value) })}
-              className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              min="0"
-              max="100"
-              required
-            />
-          </div>
-        </div>
-        <div className="flex justify-end space-x-2">
-          <button type="button" onClick={() => setIsAddingGoal(false)} className="bg-gray-300 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-400 transition duration-300 ease-in-out">
-            Annuler
-          </button>
-          <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition duration-300 ease-in-out">
-            Ajouter l'objectif
-          </button>
-        </div>
-      </form>
-    )}
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value)}
+          className="p-2 border rounded-lg bg-white shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+        >
+          <option value="target_date">Trier par date cible</option>
+          <option value="alphabet">Trier par ordre alphabétique</option>
+          <option value="progress">Trier par progrès</option>
+        </select>
+      </div>
 
-    <div className="space-y-6">
-      {filteredAndSortedGoals.map((goal) => (
-        <div key={goal.id} className="bg-white p-6 rounded-lg shadow-md">
-          {editingGoal?.id === goal.id ? (
-            <form onSubmit={(e) => { e.preventDefault(); updateGoal(editingGoal); }} className="space-y-4">
-              <input
-                type="text"
-                value={editingGoal.title}
-                onChange={(e) => setEditingGoal({ ...editingGoal, title: e.target.value })}
-                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              />
-              <textarea
-                value={editingGoal.description}
-                onChange={(e) => setEditingGoal({ ...editingGoal, description: e.target.value })}
-                className="w-full p-2 border rounded-lg resize-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                rows={3}
-              />
-              <select
-                value={editingGoal.category}
-                onChange={(e) => setEditingGoal({ ...editingGoal, category: e.target.value })}
-                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              >
-                {categories.map((category) => (
-                  <option key={category.id} value={category.name}>{category.name}</option>
-                ))}
-              </select>
-              <div className="flex space-x-4">
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Date cible</label>
-                  <input
-                    type="date"
-                    value={editingGoal.target_date}
-                    onChange={(e) => setEditingGoal({ ...editingGoal, target_date: e.target.value })}
-                    className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                </div>
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Progrès (%)</label>
-                  <input
-                    type="number"
-                    value={editingGoal.progress}
-                    onChange={(e) => setEditingGoal({ ...editingGoal, progress: Number(e.target.value) })}
-                    className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    min="0"
-                    max="100"
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end space-x-2">
-                <button type="button" onClick={() => setEditingGoal(null)} className="bg-gray-300 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-400 transition duration-300 ease-in-out">
-                  Annuler
-                </button>
-                <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition duration-300 ease-in-out">
-                  Sauvegarder
-                </button>
-              </div>
-            </form>
-          ) : (
-            <>
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <h3 className="text-xl font-semibold text-gray-800">{goal.title}</h3>
-                  <p className="text-gray-600">{goal.description}</p>
-                </div>
-                <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-full">{goal.category}</span>
-              </div>
-              <div className="flex justify-between items-center mb-4 text-sm text-gray-500">
-                <span>Date cible: {new Date(goal.target_date).toLocaleDateString()}</span>
-                <span>Progrès: {goal.progress}%</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2.5 mb-4">
-                <div 
-                  className="bg-indigo-600 h-2.5 rounded-full" 
-                  style={{ width: `${goal.progress}%` }}
-                ></div>
-              </div>
-              <div className="flex justify-between items-center">
-                <div className="flex space-x-2">
-                  <button onClick={() => setEditingGoal(goal)} className="text-indigo-600 hover:text-indigo-800 transition duration-300 ease-in-out">
-                    <PencilIcon className="h-5 w-5" />
-                  </button>
-                  <button onClick={() => deleteGoal(goal.id)} className="text-red-600 hover:text-red-800 transition duration-300 ease-in-out">
-                    <TrashIcon className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-            </>
-          )}
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold mb-2">Ajouter une nouvelle catégorie</h2>
+        <div className="flex">
+          <input
+            type="text"
+            value={newCategory}
+            onChange={(e) => setNewCategory(e.target.value)}
+            className="flex-grow p-2 border rounded-l-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            placeholder="Nom de la catégorie"
+          />
+          <button
+            onClick={addCategory}
+            className="bg-indigo-600 text-white px-4 py-2 rounded-r-lg hover:bg-indigo-700 transition duration-300 ease-in-out"
+          >
+            Ajouter
+          </button>
         </div>
-      ))}
+      </div>
+
+      {isAddingGoal && (
+        <form onSubmit={addGoal} className="mb-8 bg-white p-6 rounded-lg shadow-md">
+          <h2 className="text-xl font-semibold mb-4 text-gray-800">Ajouter un nouvel objectif</h2>
+          <input
+            type="text"
+            placeholder="Titre de l'objectif"
+            value={newGoal.title}
+            onChange={(e) => setNewGoal({ ...newGoal, title: e.target.value })}
+            className="w-full p-2 mb-4 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            required
+          />
+          <textarea
+            placeholder="Description"
+            value={newGoal.description}
+            onChange={(e) => setNewGoal({ ...newGoal, description: e.target.value })}
+            className="w-full p-2 mb-4 border rounded-lg resize-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            rows={3}
+          />
+          <select
+            value={newGoal.category}
+            onChange={(e) => setNewGoal({ ...newGoal, category: e.target.value })}
+            className="w-full p-2 mb-4 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            required
+          >
+            <option value="">Sélectionnez une catégorie</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.name}>{category.name}</option>
+            ))}
+          </select>
+          <div className="flex space-x-4 mb-4">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Date cible</label>
+              <input
+                type="date"
+                value={newGoal.target_date}
+                onChange={(e) => setNewGoal({ ...newGoal, target_date: e.target.value })}
+                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                required
+              />
+            </div>
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Progrès initial (%)</label>
+              <input
+                type="number"
+                value={newGoal.progress}
+                onChange={(e) => setNewGoal({ ...newGoal, progress: Number(e.target.value) })}
+                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                min="0"
+                max="100"
+                required
+              />
+            </div>
+          </div>
+          <div className="flex justify-end space-x-2">
+            <button type="button" onClick={() => setIsAddingGoal(false)} className="bg-gray-300 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-400 transition duration-300 ease-in-out">
+              Annuler
+            </button>
+            <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition duration-300 ease-in-out">
+              Ajouter l'objectif
+            </button>
+          </div>
+        </form>
+      )}
+
+      <div className="space-y-6">
+        {filteredAndSortedGoals.map((goal) => (
+          <div key={goal.id} className="bg-white p-6 rounded-lg shadow-md">
+            {editingGoal?.id === goal.id ? (
+              <form onSubmit={(e) => { e.preventDefault(); updateGoal(editingGoal); }} className="space-y-4">
+                <input
+                  type="text"
+                  value={editingGoal.title}
+                  onChange={(e) => setEditingGoal({ ...editingGoal, title: e.target.value })}
+                  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                />
+                <textarea
+                  value={editingGoal.description}
+                  onChange={(e) => setEditingGoal({ ...editingGoal, description: e.target.value })}
+                  className="w-full p-2 border rounded-lg resize-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  rows={3}
+                />
+                <select
+                  value={editingGoal.category}
+                  onChange={(e) => setEditingGoal({ ...editingGoal, category: e.target.value })}
+                  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                >
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.name}>{category.name}</option>
+                  ))}
+                </select>
+                <div className="flex space-x-4">
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Date cible</label>
+                    <input
+                      type="date"
+                      value={editingGoal.target_date}
+                      onChange={(e) => setEditingGoal({ ...editingGoal, target_date: e.target.value })}
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Progrès (%)</label>
+                    <input
+                      type="number"
+                      value={editingGoal.progress}
+                      onChange={(e) => setEditingGoal({ ...editingGoal, progress: Number(e.target.value) })}
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                      min="0"
+                      max="100"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end space-x-2">
+                  <button type="button" onClick={() => setEditingGoal(null)} className="bg-gray-300 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-400 transition duration-300 ease-in-out">
+                    Annuler
+                  </button>
+                  <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition duration-300 ease-in-out">
+                    Sauvegarder
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-800">{goal.title}</h3>
+                    <p className="text-gray-600">{goal.description}</p>
+                  </div>
+                  <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-full">{goal.category}</span>
+                </div>
+                <div className="flex justify-between items-center mb-4 text-sm text-gray-500">
+                  <span>Date cible: {new Date(goal.target_date).toLocaleDateString()}</span>
+                  <span>Progrès: {goal.progress}%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2.5 mb-4">
+                  <div 
+                    className="bg-indigo-600 h-2.5 rounded-full" 
+                    style={{ width: `${goal.progress}%` }}
+                  ></div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <div className="flex space-x-2">
+                    <button onClick={() => setEditingGoal(goal)} className="text-indigo-600 hover:text-indigo-800 transition duration-300 ease-in-out">
+                      <PencilIcon className="h-5 w-5" />
+                    </button>
+                    <button onClick={() => deleteGoal(goal.id)} className="text-red-600 hover:text-red-800 transition duration-300 ease-in-out">
+                      <TrashIcon className="h-5 w-5" />
+                    </button>
+                  </div>
+                  <button 
+                    onClick={() => updateGoal({ ...goal, progress: 100 })}
+                    className={`flex items-center space-x-1 px-3 py-1 rounded-lg transition duration-300 ease-in-out ${
+                      goal.progress === 100 
+                        ? 'bg-green-100 text-green-800 hover:bg-green-200' 
+                        : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                    }`}
+                  >
+                    {goal.progress === 100 ? (
+                      <>
+                        <CheckIcon className="h-4 w-4" />
+                        <span>Complété</span>
+                      </>
+                    ) : (
+                      <>
+                        <XMarkIcon className="h-4 w-4" />
+                        <span>Non complété</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
-  </div>
-)
+  )
 }

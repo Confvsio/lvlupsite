@@ -48,6 +48,7 @@ export default function Habits() {
   const [editingHabit, setEditingHabit] = useState<Habit | null>(null)
   const [filter, setFilter] = useState<string>('all')
   const [sort, setSort] = useState<string>('streak')
+  const [newCategory, setNewCategory] = useState('')
 
   useEffect(() => {
     if (user) {
@@ -95,7 +96,7 @@ export default function Habits() {
     if (error) {
       console.error('Error adding habit:', error)
     } else if (data) {
-      setHabits([...data, ...habits])
+      setHabits([...habits, ...data])
       setNewHabit({
         title: '',
         description: '',
@@ -162,6 +163,22 @@ export default function Habits() {
     await updateHabit(updatedHabit)
   }
 
+  async function addCategory() {
+    if (!newCategory.trim()) return
+
+    const { data, error } = await supabase
+      .from('categories')
+      .insert([{ name: newCategory.trim() }])
+      .select()
+
+    if (error) {
+      console.error('Error adding category:', error)
+    } else if (data) {
+      setCategories([...categories, ...data])
+      setNewCategory('')
+    }
+  }
+
   const filteredAndSortedHabits = habits
     .filter(habit => filter === 'all' || habit.category === filter)
     .sort((a, b) => {
@@ -189,7 +206,7 @@ export default function Habits() {
         Ajouter une nouvelle habitude
       </button>
 
-      <div className="mb-6 flex space-x-4">
+      <div className="mb-6 flex flex-wrap gap-4">
         <select
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
@@ -210,9 +227,28 @@ export default function Habits() {
         </select>
       </div>
 
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold mb-2">Ajouter une nouvelle catégorie</h2>
+        <div className="flex">
+          <input
+            type="text"
+            value={newCategory}
+            onChange={(e) => setNewCategory(e.target.value)}
+            className="flex-grow p-2 border rounded-l-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            placeholder="Nom de la catégorie"
+          />
+          <button
+            onClick={addCategory}
+            className="bg-indigo-600 text-white px-4 py-2 rounded-r-lg hover:bg-indigo-700 transition duration-300 ease-in-out"
+          >
+            Ajouter
+          </button>
+        </div>
+      </div>
+
       {isAddingHabit && (
         <form onSubmit={addHabit} className="mb-8 bg-white p-6 rounded-lg shadow-md">
-                    <h2 className="text-xl font-semibold mb-4 text-gray-800">Ajouter une nouvelle habitude</h2>
+          <h2 className="text-xl font-semibold mb-4 text-gray-800">Ajouter une nouvelle habitude</h2>
           <input
             type="text"
             placeholder="Titre de l'habitude"
@@ -275,7 +311,7 @@ export default function Habits() {
         </form>
       )}
 
-      <div className="space-y-6">
+<div className="space-y-6">
         {filteredAndSortedHabits.map((habit) => (
           <div key={habit.id} className="bg-white p-6 rounded-lg shadow-md">
             {editingHabit?.id === habit.id ? (
