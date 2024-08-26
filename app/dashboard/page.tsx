@@ -203,8 +203,8 @@ export default function Dashboard() {
       <DashboardCard title="Discord Server" icon={<FaDiscord className="text-indigo-500" size={24} />}>
         <div className="flex justify-center">
           <iframe 
-            src="https://discordapp.com/widget?id=1260571847636811786&theme=light" 
-            width="100%" 
+            src="https://discordapp.com/widget?id=1260571847636811786&theme=dark" 
+            width="70%" 
             height="500" 
             className="max-w-[350px]"
             allowTransparency={true} 
