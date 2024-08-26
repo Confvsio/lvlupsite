@@ -79,11 +79,10 @@ export default function Dashboard() {
   }
 
   async function fetchDiscordMessages() {
-    // This would be a server-side function in a real application
-    // For demo purposes, we'll use mock data
+    // Mock data for Discord messages
     const mockMessages = [
       { id: '1', content: 'Hello everyone!', author: 'User1', timestamp: '2023-05-20T10:00:00Z' },
-      { id: '2', content: "How's the progress going?", author: 'User2', timestamp: '2023-05-20T10:05:00Z' },
+      { id: '2', content: 'How\'s the progress going?', author: 'User2', timestamp: '2023-05-20T10:05:00Z' },
       { id: '3', content: 'Great! Just completed my daily goal.', author: 'User3', timestamp: '2023-05-20T10:10:00Z' },
     ]
     setDiscordMessages(mockMessages)
@@ -183,7 +182,7 @@ export default function Dashboard() {
         </DashboardCard>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <DashboardCard title="Objectifs Récents">
           <div className="space-y-4">
             {goals.map((goal) => (
