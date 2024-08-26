@@ -199,8 +199,6 @@ export default function Dashboard() {
           </Link>
         </DashboardCard>
       </div>
-
-      <DashboardCard title="Discord Server" icon={<FaDiscord className="text-indigo-500" size={24} />}>
         <div className="flex justify-center">
           <iframe 
             src="https://discordapp.com/widget?id=1260571847636811786&theme=dark" 
@@ -212,7 +210,6 @@ export default function Dashboard() {
             sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"
           ></iframe>
         </div>
-      </DashboardCard>
     </div>
   )
 }
