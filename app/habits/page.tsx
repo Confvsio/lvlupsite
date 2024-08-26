@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react'
 import LoadingSpinner from '@/components/LoadingSpinner'
-import { PlusIcon, PencilIcon, TrashIcon, CheckIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, PencilIcon, TrashIcon, CheckIcon } from '@heroicons/react/24/outline'
 
 type Frequency = 'daily' | 'weekly' | 'monthly'
 
@@ -179,11 +179,11 @@ export default function Habits() {
 
   return (
     <div className="max-w-4xl mx-auto p-4">
-      <h1 className="text-3xl font-bold mb-6 text-center">Mes Habitudes</h1>
+      <h1 className="text-3xl font-bold mb-6 text-center text-gray-800">Mes Habitudes</h1>
 
       <button
         onClick={() => setIsAddingHabit(true)}
-        className="mb-6 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 flex items-center"
+        className="mb-6 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition duration-300 ease-in-out flex items-center"
       >
         <PlusIcon className="h-5 w-5 mr-2" />
         Ajouter une nouvelle habitude
@@ -193,7 +193,7 @@ export default function Habits() {
         <select
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          className="p-2 border rounded"
+          className="p-2 border rounded-lg bg-white shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
         >
           <option value="all">Toutes les catégories</option>
           {categories.map((category) => (
@@ -203,7 +203,7 @@ export default function Habits() {
         <select
           value={sort}
           onChange={(e) => setSort(e.target.value)}
-          className="p-2 border rounded"
+          className="p-2 border rounded-lg bg-white shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
         >
           <option value="streak">Trier par série actuelle</option>
           <option value="alphabet">Trier par ordre alphabétique</option>
@@ -211,26 +211,27 @@ export default function Habits() {
       </div>
 
       {isAddingHabit && (
-        <form onSubmit={addHabit} className="mb-8 bg-white p-6 rounded-lg shadow">
-          <h2 className="text-xl font-semibold mb-4">Ajouter une nouvelle habitude</h2>
+        <form onSubmit={addHabit} className="mb-8 bg-white p-6 rounded-lg shadow-md">
+                    <h2 className="text-xl font-semibold mb-4 text-gray-800">Ajouter une nouvelle habitude</h2>
           <input
             type="text"
             placeholder="Titre de l'habitude"
             value={newHabit.title}
             onChange={(e) => setNewHabit({ ...newHabit, title: e.target.value })}
-            className="w-full p-2 mb-4 border rounded"
+            className="w-full p-2 mb-4 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             required
           />
           <textarea
             placeholder="Description"
             value={newHabit.description}
             onChange={(e) => setNewHabit({ ...newHabit, description: e.target.value })}
-            className="w-full p-2 mb-4 border rounded resize-none"
+            className="w-full p-2 mb-4 border rounded-lg resize-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            rows={3}
           />
           <select
             value={newHabit.category}
             onChange={(e) => setNewHabit({ ...newHabit, category: e.target.value })}
-            className="w-full p-2 mb-4 border rounded"
+            className="w-full p-2 mb-4 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             required
           >
             <option value="">Sélectionnez une catégorie</option>
@@ -240,11 +241,11 @@ export default function Habits() {
           </select>
           <div className="flex space-x-4 mb-4">
             <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700">Fréquence</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Fréquence</label>
               <select
                 value={newHabit.frequency}
                 onChange={(e) => setNewHabit({ ...newHabit, frequency: e.target.value as Frequency })}
-                className="w-full p-2 border rounded"
+                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               >
                 {frequencyOptions.map(option => (
                   <option key={option.value} value={option.value}>{option.label}</option>
@@ -252,22 +253,22 @@ export default function Habits() {
               </select>
             </div>
             <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700">Objectif (nombre de fois)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Objectif (nombre de fois)</label>
               <input
                 type="number"
                 value={newHabit.target_count}
                 onChange={(e) => setNewHabit({ ...newHabit, target_count: Number(e.target.value) })}
-                className="w-full p-2 border rounded"
+                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 min="1"
                 required
               />
             </div>
           </div>
           <div className="flex justify-end space-x-2">
-            <button type="button" onClick={() => setIsAddingHabit(false)} className="bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400">
+            <button type="button" onClick={() => setIsAddingHabit(false)} className="bg-gray-300 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-400 transition duration-300 ease-in-out">
               Annuler
             </button>
-            <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">
+            <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition duration-300 ease-in-out">
               Ajouter l'habitude
             </button>
           </div>
@@ -276,24 +277,25 @@ export default function Habits() {
 
       <div className="space-y-6">
         {filteredAndSortedHabits.map((habit) => (
-          <div key={habit.id} className="bg-white p-6 rounded-lg shadow">
+          <div key={habit.id} className="bg-white p-6 rounded-lg shadow-md">
             {editingHabit?.id === habit.id ? (
               <form onSubmit={(e) => { e.preventDefault(); updateHabit(editingHabit); }} className="space-y-4">
                 <input
                   type="text"
                   value={editingHabit.title}
                   onChange={(e) => setEditingHabit({ ...editingHabit, title: e.target.value })}
-                  className="w-full p-2 border rounded"
+                  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 />
                 <textarea
                   value={editingHabit.description}
                   onChange={(e) => setEditingHabit({ ...editingHabit, description: e.target.value })}
-                  className="w-full p-2 border rounded resize-none"
+                  className="w-full p-2 border rounded-lg resize-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  rows={3}
                 />
                 <select
                   value={editingHabit.category}
                   onChange={(e) => setEditingHabit({ ...editingHabit, category: e.target.value })}
-                  className="w-full p-2 border rounded"
+                  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 >
                   {categories.map((category) => (
                     <option key={category.id} value={category.name}>{category.name}</option>
@@ -301,11 +303,11 @@ export default function Habits() {
                 </select>
                 <div className="flex space-x-4">
                   <div className="flex-1">
-                    <label className="block text-sm font-medium text-gray-700">Fréquence</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Fréquence</label>
                     <select
                       value={editingHabit.frequency}
                       onChange={(e) => setEditingHabit({ ...editingHabit, frequency: e.target.value as Frequency })}
-                      className="w-full p-2 border rounded"
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                     >
                       {frequencyOptions.map(option => (
                         <option key={option.value} value={option.value}>{option.label}</option>
@@ -313,21 +315,21 @@ export default function Habits() {
                     </select>
                   </div>
                   <div className="flex-1">
-                    <label className="block text-sm font-medium text-gray-700">Objectif (nombre de fois)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Objectif (nombre de fois)</label>
                     <input
                       type="number"
                       value={editingHabit.target_count}
                       onChange={(e) => setEditingHabit({ ...editingHabit, target_count: Number(e.target.value) })}
-                      className="w-full p-2 border rounded"
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                       min="1"
                     />
                   </div>
                 </div>
                 <div className="flex justify-end space-x-2">
-                  <button type="button" onClick={() => setEditingHabit(null)} className="bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400">
+                  <button type="button" onClick={() => setEditingHabit(null)} className="bg-gray-300 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-400 transition duration-300 ease-in-out">
                     Annuler
                   </button>
-                  <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">
+                  <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition duration-300 ease-in-out">
                     Sauvegarder
                   </button>
                 </div>
@@ -336,10 +338,10 @@ export default function Habits() {
               <>
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <h3 className="text-xl font-semibold">{habit.title}</h3>
+                    <h3 className="text-xl font-semibold text-gray-800">{habit.title}</h3>
                     <p className="text-gray-600">{habit.description}</p>
                   </div>
-                  <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">{habit.category}</span>
+                  <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-full">{habit.category}</span>
                 </div>
                 <div className="flex justify-between items-center mb-4 text-sm text-gray-500">
                   <span>Fréquence: {frequencyOptions.find(f => f.value === habit.frequency)?.label}</span>
@@ -357,16 +359,16 @@ export default function Habits() {
                 </div>
                 <div className="flex justify-between items-center">
                   <div className="flex space-x-2">
-                    <button onClick={() => setEditingHabit(habit)} className="text-indigo-600 hover:text-indigo-800">
+                    <button onClick={() => setEditingHabit(habit)} className="text-indigo-600 hover:text-indigo-800 transition duration-300 ease-in-out">
                       <PencilIcon className="h-5 w-5" />
                     </button>
-                    <button onClick={() => deleteHabit(habit.id)} className="text-red-600 hover:text-red-800">
+                    <button onClick={() => deleteHabit(habit.id)} className="text-red-600 hover:text-red-800 transition duration-300 ease-in-out">
                       <TrashIcon className="h-5 w-5" />
                     </button>
                   </div>
                   <button 
                     onClick={() => completeHabit(habit)}
-                    className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 flex items-center"
+                    className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition duration-300 ease-in-out flex items-center"
                   >
                     <CheckIcon className="h-5 w-5 mr-2" />
                     Marquer comme complété

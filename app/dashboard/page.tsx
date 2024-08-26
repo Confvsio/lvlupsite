@@ -5,24 +5,7 @@ import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react'
 import Link from 'next/link'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
-
-const weeklyData = [
-  { name: 'Lun', progress: 4 },
-  { name: 'Mar', progress: 3 },
-  { name: 'Mer', progress: 5 },
-  { name: 'Jeu', progress: 2 },
-  { name: 'Ven', progress: 6 },
-  { name: 'Sam', progress: 4 },
-  { name: 'Dim', progress: 3 },
-]
-
-const habitData = [
-  { name: 'Complétées', value: 5 },
-  { name: 'En cours', value: 3 },
-  { name: 'Non commencées', value: 2 },
-]
-
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28']
+import { FaTrophy, FaChartLine, FaCalendarCheck, FaDiscord } from 'react-icons/fa'
 
 type Goal = {
   id: number
@@ -38,6 +21,15 @@ type Habit = {
   last_completed: string | null
 }
 
+type DiscordMessage = {
+  id: string
+  content: string
+  author: string
+  timestamp: string
+}
+
+const COLORS = ['#4F46E5', '#10B981', '#F59E0B']
+
 export default function Dashboard() {
   const user = useUser()
   const supabase = useSupabaseClient()
@@ -45,12 +37,14 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true)
   const [goals, setGoals] = useState<Goal[]>([])
   const [habits, setHabits] = useState<Habit[]>([])
+  const [discordMessages, setDiscordMessages] = useState<DiscordMessage[]>([])
 
   useEffect(() => {
     if (user) {
       setUsername(user.user_metadata.username || null)
       fetchGoals()
       fetchHabits()
+      fetchDiscordMessages()
     }
   }, [user])
 
@@ -82,6 +76,17 @@ export default function Dashboard() {
     } else {
       setHabits(data || [])
     }
+  }
+
+  async function fetchDiscordMessages() {
+    // This would be a server-side function in a real application
+    // For demo purposes, we'll use mock data
+    const mockMessages = [
+      { id: '1', content: 'Hello everyone!', author: 'User1', timestamp: '2023-05-20T10:00:00Z' },
+      { id: '2', content: "How's the progress going?", author: 'User2', timestamp: '2023-05-20T10:05:00Z' },
+      { id: '3', content: 'Great! Just completed my daily goal.', author: 'User3', timestamp: '2023-05-20T10:10:00Z' },
+    ]
+    setDiscordMessages(mockMessages)
     setIsLoading(false)
   }
 
@@ -89,8 +94,14 @@ export default function Dashboard() {
     return <LoadingSpinner />
   }
 
+  const habitData = [
+    { name: 'Complétées', value: habits.filter(h => h.current_streak > 0).length },
+    { name: 'En cours', value: habits.filter(h => h.current_streak === 0 && h.last_completed).length },
+    { name: 'Non commencées', value: habits.filter(h => !h.last_completed).length },
+  ]
+
   return (
-    <div className="max-w-7xl mx-auto p-6">
+    <div className="max-w-7xl mx-auto p-6 bg-gray-50">
       <h1 className="text-4xl font-bold mb-8 text-gray-800 text-center">Tableau de Bord</h1>
       
       {!username && (
@@ -100,13 +111,13 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <DashboardCard title="Objectifs en cours">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+        <DashboardCard title="Objectifs en cours" icon={<FaChartLine className="text-indigo-500" size={24} />}>
           <p className="text-3xl font-bold text-indigo-600">{goals.length}</p>
           <p className="text-gray-600">objectifs récents</p>
         </DashboardCard>
 
-        <DashboardCard title="Niveau">
+        <DashboardCard title="Niveau" icon={<FaTrophy className="text-yellow-500" size={24} />}>
           <div className="text-center">
             <p className="text-4xl font-bold text-indigo-600">Niveau 5</p>
             <p className="text-gray-600">450 XP / 1000 XP</p>
@@ -116,21 +127,28 @@ export default function Dashboard() {
           </div>
         </DashboardCard>
 
-        <DashboardCard title="Habitudes actives">
+        <DashboardCard title="Habitudes actives" icon={<FaCalendarCheck className="text-green-500" size={24} />}>
           <p className="text-3xl font-bold text-indigo-600">{habits.length}</p>
           <p className="text-gray-600">habitudes suivies</p>
+        </DashboardCard>
+
+        <DashboardCard title="Meilleure série" icon={<FaTrophy className="text-purple-500" size={24} />}>
+          <p className="text-3xl font-bold text-indigo-600">
+            {habits.reduce((max, habit) => Math.max(max, habit.longest_streak), 0)}
+          </p>
+          <p className="text-gray-600">jours consécutifs</p>
         </DashboardCard>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <DashboardCard title="Progrès Hebdomadaire">
           <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={weeklyData}>
+            <LineChart data={goals}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
+              <XAxis dataKey="title" />
               <YAxis />
               <Tooltip />
-              <Line type="monotone" dataKey="progress" stroke="#8884d8" />
+              <Line type="monotone" dataKey="progress" stroke="#4F46E5" />
             </LineChart>
           </ResponsiveContainer>
         </DashboardCard>
@@ -165,7 +183,7 @@ export default function Dashboard() {
         </DashboardCard>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <DashboardCard title="Objectifs Récents">
           <div className="space-y-4">
             {goals.map((goal) => (
@@ -191,14 +209,29 @@ export default function Dashboard() {
           </Link>
         </DashboardCard>
       </div>
+
+      <DashboardCard title="Discord Server" icon={<FaDiscord className="text-indigo-500" size={24} />}>
+        <div className="space-y-4 max-h-60 overflow-y-auto">
+          {discordMessages.map((message) => (
+            <div key={message.id} className="bg-white p-3 rounded-lg shadow">
+              <p className="font-semibold">{message.author}</p>
+              <p>{message.content}</p>
+              <p className="text-xs text-gray-500">{new Date(message.timestamp).toLocaleString()}</p>
+            </div>
+          ))}
+        </div>
+      </DashboardCard>
     </div>
   )
 }
 
-function DashboardCard({ title, children }: { title: string, children: React.ReactNode }) {
+function DashboardCard({ title, children, icon, className = '' }: { title: string, children: React.ReactNode, icon?: React.ReactNode, className?: string }) {
   return (
-    <div className="bg-white shadow-lg rounded-lg p-6 transition-transform transform hover:scale-105">
-      <h2 className="text-xl font-semibold mb-4 text-gray-800">{title}</h2>
+    <div className={`bg-white shadow-lg rounded-lg p-6 transition-transform transform hover:scale-105 ${className}`}>
+      <div className="flex items-center mb-4">
+        {icon && <div className="mr-2">{icon}</div>}
+        <h2 className="text-xl font-semibold text-gray-800">{title}</h2>
+      </div>
       <div className="text-gray-600">
         {children}
       </div>
