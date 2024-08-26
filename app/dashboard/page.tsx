@@ -21,13 +21,6 @@ type Habit = {
   last_completed: string | null
 }
 
-type DiscordMessage = {
-  id: string
-  content: string
-  author: string
-  timestamp: string
-}
-
 const COLORS = ['#4F46E5', '#10B981', '#F59E0B']
 
 export default function Dashboard() {
@@ -37,14 +30,12 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true)
   const [goals, setGoals] = useState<Goal[]>([])
   const [habits, setHabits] = useState<Habit[]>([])
-  const [discordMessages, setDiscordMessages] = useState<DiscordMessage[]>([])
-
+  
   useEffect(() => {
     if (user) {
       setUsername(user.user_metadata.username || null)
       fetchGoals()
       fetchHabits()
-      fetchDiscordMessages()
     }
   }, [user])
 
@@ -76,17 +67,6 @@ export default function Dashboard() {
     } else {
       setHabits(data || [])
     }
-  }
-
-  async function fetchDiscordMessages() {
-    // Mock data for Discord messages
-    const mockMessages = [
-      { id: '1', content: 'Hello everyone!', author: 'User1', timestamp: '2023-05-20T10:00:00Z' },
-      { id: '2', content: 'How\'s the progress going?', author: 'User2', timestamp: '2023-05-20T10:05:00Z' },
-      { id: '3', content: 'Great! Just completed my daily goal.', author: 'User3', timestamp: '2023-05-20T10:10:00Z' },
-    ]
-    setDiscordMessages(mockMessages)
-    setIsLoading(false)
   }
 
   if (isLoading) {
@@ -210,14 +190,15 @@ export default function Dashboard() {
       </div>
 
       <DashboardCard title="Discord Server" icon={<FaDiscord className="text-indigo-500" size={24} />}>
-        <div className="space-y-4 max-h-60 overflow-y-auto">
-          {discordMessages.map((message) => (
-            <div key={message.id} className="bg-white p-3 rounded-lg shadow">
-              <p className="font-semibold">{message.author}</p>
-              <p>{message.content}</p>
-              <p className="text-xs text-gray-500">{new Date(message.timestamp).toLocaleString()}</p>
-            </div>
-          ))}
+        <div className="flex justify-center">
+          <iframe 
+            src="https://discordapp.com/widget?id=1260571847636811786&theme=dark" 
+            width="350" 
+            height="500" 
+            allowTransparency={true} 
+            frameBorder="0" 
+            sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"
+          ></iframe>
         </div>
       </DashboardCard>
     </div>
