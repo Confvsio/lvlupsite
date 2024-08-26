@@ -28,9 +28,10 @@ export default function Dashboard() {
   const supabase = useSupabaseClient()
   const [username, setUsername] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [goals, setGoals] = useState<Goal[]>([])
   const [habits, setHabits] = useState<Habit[]>([])
-  
+
   useEffect(() => {
     if (user) {
       setUsername(user.user_metadata.username || null)
@@ -40,37 +41,47 @@ export default function Dashboard() {
   }, [user])
 
   async function fetchGoals() {
-    const { data, error } = await supabase
-      .from('goals')
-      .select('id, title, progress')
-      .eq('user_id', user?.id)
-      .order('created_at', { ascending: false })
-      .limit(5)
+    try {
+      const { data, error } = await supabase
+        .from('goals')
+        .select('id, title, progress')
+        .eq('user_id', user?.id)
+        .order('created_at', { ascending: false })
+        .limit(5)
 
-    if (error) {
-      console.error('Error fetching goals:', error)
-    } else {
+      if (error) throw error
       setGoals(data || [])
+    } catch (error) {
+      console.error('Error fetching goals:', error)
+      setError('Failed to fetch goals. Please try refreshing the page.')
     }
   }
 
   async function fetchHabits() {
-    const { data, error } = await supabase
-      .from('habits')
-      .select('id, title, current_streak, longest_streak, last_completed')
-      .eq('user_id', user?.id)
-      .order('current_streak', { ascending: false })
-      .limit(5)
+    try {
+      const { data, error } = await supabase
+        .from('habits')
+        .select('id, title, current_streak, longest_streak, last_completed')
+        .eq('user_id', user?.id)
+        .order('current_streak', { ascending: false })
+        .limit(5)
 
-    if (error) {
-      console.error('Error fetching habits:', error)
-    } else {
+      if (error) throw error
       setHabits(data || [])
+    } catch (error) {
+      console.error('Error fetching habits:', error)
+      setError('Failed to fetch habits. Please try refreshing the page.')
+    } finally {
+      setIsLoading(false)
     }
   }
 
   if (isLoading) {
     return <LoadingSpinner />
+  }
+
+  if (error) {
+    return <div className="text-red-500 text-center">{error}</div>
   }
 
   const habitData = [
@@ -162,7 +173,7 @@ export default function Dashboard() {
         </DashboardCard>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <DashboardCard title="Objectifs Récents">
           <div className="space-y-4">
             {goals.map((goal) => (
@@ -192,9 +203,10 @@ export default function Dashboard() {
       <DashboardCard title="Discord Server" icon={<FaDiscord className="text-indigo-500" size={24} />}>
         <div className="flex justify-center">
           <iframe 
-            src="https://discordapp.com/widget?id=1260571847636811786&theme=dark" 
-            width="350" 
+            src="https://discordapp.com/widget?id=1260571847636811786&theme=light" 
+            width="100%" 
             height="500" 
+            className="max-w-[350px]"
             allowTransparency={true} 
             frameBorder="0" 
             sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"
