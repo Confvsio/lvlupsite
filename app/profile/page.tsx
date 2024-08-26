@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import Link from 'next/link'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, Legend } from 'recharts'
 import { PencilIcon, CheckIcon, XMarkIcon } from '@heroicons/react/24/outline'
 
@@ -592,33 +593,38 @@ return (
 }
 
 function AchievementBadges({ achievements }: { achievements: Achievement[] }) {
-if (achievements.length === 0) {
+  if (achievements.length === 0) {
+    return (
+      <div className="bg-white shadow rounded-lg p-6 mb-6">
+        <h2 className="text-xl font-semibold mb-4">Badges de Réussite</h2>
+        <p className="text-gray-600">Aucun badge de réussite disponible pour le moment.</p>
+      </div>
+    )
+  }
+
   return (
     <div className="bg-white shadow rounded-lg p-6 mb-6">
-      <h2 className="text-xl font-semibold mb-4">Badges de Réussite</h2>
-      <p className="text-gray-600">Aucun badge de réussite disponible pour le moment.</p>
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-semibold">Badges de Réussite</h2>
+        <Link href="/achievements" className="text-indigo-600 hover:text-indigo-800 transition duration-300">
+          Voir tous les badges
+        </Link>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {achievements.slice(0, 8).map(achievement => (
+          <div 
+            key={achievement.id} 
+            className={`text-center p-4 rounded-lg ${achievement.earned ? 'bg-indigo-100' : 'bg-gray-100'}`}
+          >
+            <div className="text-4xl mb-2">{achievement.icon}</div>
+            <h3 className="font-medium">{achievement.title}</h3>
+            <p className="text-sm text-gray-600">{achievement.description}</p>
+            {achievement.earned && <p className="text-xs text-indigo-600 mt-2">Obtenu</p>}
+          </div>
+        ))}
+      </div>
     </div>
   )
-}
-
-return (
-  <div className="bg-white shadow rounded-lg p-6 mb-6">
-    <h2 className="text-xl font-semibold mb-4">Badges de Réussite</h2>
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-      {achievements.map(achievement => (
-        <div 
-          key={achievement.id} 
-          className={`text-center p-4 rounded-lg ${achievement.earned ? 'bg-indigo-100' : 'bg-gray-100'}`}
-        >
-          <div className="text-4xl mb-2">{achievement.icon}</div>
-          <h3 className="font-medium">{achievement.title}</h3>
-          <p className="text-sm text-gray-600">{achievement.description}</p>
-          {achievement.earned && <p className="text-xs text-indigo-600 mt-2">Obtenu</p>}
-        </div>
-      ))}
-    </div>
-  </div>
-)
 }
 
 function ActivityFeed({ activityItems }: { activityItems: ActivityItem[] }) {
