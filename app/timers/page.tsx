@@ -15,9 +15,15 @@ type TimerType = 'pomodoro' | 'deepWork'
 type TimerState = 'idle' | 'running' | 'paused' | 'break'
 
 export default function TimersPage() {
-  const [timerType, setTimerType] = useState<TimerType>('pomodoro')
-  const [timerState, setTimerState] = useState<TimerState>('idle')
-  const [timeLeft, setTimeLeft] = useState(25 * 60)
+  const [activeTimer, setActiveTimer] = useState<TimerType>('pomodoro')
+  const [timerStates, setTimerStates] = useState<Record<TimerType, TimerState>>({
+    pomodoro: 'idle',
+    deepWork: 'idle'
+  })
+  const [timesLeft, setTimesLeft] = useState<Record<TimerType, number>>({
+    pomodoro: 25 * 60,
+    deepWork: 60 * 60
+  })
   const [pomoDuration, setPomoDuration] = useState(25)
   const [deepWorkDuration, setDeepWorkDuration] = useState(60)
   const [pomoShortBreak, setPomoShortBreak] = useState(5)
@@ -98,44 +104,49 @@ export default function TimersPage() {
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null
-    if (timerState === 'running') {
+    if (timerStates[activeTimer] === 'running') {
       interval = setInterval(() => {
-        setTimeLeft((prevTime) => {
-          if (prevTime <= 1) {
+        setTimesLeft((prevTimes) => {
+          const newTimes = { ...prevTimes }
+          if (newTimes[activeTimer] <= 1) {
             clearInterval(interval!)
-            handleTimerComplete()
-            return 0
+            handleTimerComplete(activeTimer)
+            return newTimes
           }
-          return prevTime - 1
+          newTimes[activeTimer] -= 1
+          return newTimes
         })
       }, 1000)
     }
     return () => {
       if (interval) clearInterval(interval)
     }
-  }, [timerState])
+  }, [timerStates, activeTimer])
 
   useEffect(() => {
-    resetTimer()
-  }, [pomoDuration, deepWorkDuration, timerType])
+    setTimesLeft({
+      pomodoro: pomoDuration * 60,
+      deepWork: deepWorkDuration * 60
+    })
+  }, [pomoDuration, deepWorkDuration])
 
   useEffect(() => {
     debouncedUpdateUserData()
   }, [pomoDuration, deepWorkDuration, pomoShortBreak, pomoLongBreak, deepWorkBreak, autoBreak, soundEnabled, dailySessions, weeklySessions, totalFocusTime, longestStreak, weeklyData])
 
-  const handleTimerComplete = useCallback(() => {
+  const handleTimerComplete = (timerType: TimerType) => {
     if (soundEnabled) {
       playNotificationSound()
     }
     if (autoBreak) {
-      startBreak()
+      startBreak(timerType)
     } else {
-      setTimerState('idle')
+      setTimerStates(prev => ({ ...prev, [timerType]: 'idle' }))
     }
-    updateSessionCount()
-  }, [soundEnabled, autoBreak])
+    updateSessionCount(timerType)
+  }
 
-  const updateSessionCount = useCallback(() => {
+  const updateSessionCount = useCallback((timerType: TimerType) => {
     const newDailySessions = {
       ...dailySessions,
       [timerType]: dailySessions[timerType] + 1
@@ -177,7 +188,7 @@ export default function TimersPage() {
     setWeeklyData(updatedWeeklyData)
 
     updateUserData()
-  }, [dailySessions, weeklySessions, totalFocusTime, longestStreak, timerType, pomoDuration, deepWorkDuration, weeklyData, updateUserData])
+  }, [dailySessions, weeklySessions, totalFocusTime, longestStreak, pomoDuration, deepWorkDuration, weeklyData, updateUserData])
 
   const calculateProductivity = (dayData: any) => {
     const totalSessions = (dayData.pomodoro || 0) + (dayData.deepWork || 0)
@@ -189,31 +200,35 @@ export default function TimersPage() {
     audio.play()
   }
 
-  const startTimer = () => {
-    setTimerState('running')
-    setTimeLeft(timerType === 'pomodoro' ? pomoDuration * 60 : deepWorkDuration * 60)
+  const startTimer = (timerType: TimerType) => {
+    setActiveTimer(timerType)
+    setTimerStates(prev => ({ ...prev, [timerType]: 'running' }))
   }
 
-  const pauseTimer = () => {
-    setTimerState('paused')
+  const pauseTimer = (timerType: TimerType) => {
+    setTimerStates(prev => ({ ...prev, [timerType]: 'paused' }))
   }
 
-  const resumeTimer = () => {
-    setTimerState('running')
+  const resumeTimer = (timerType: TimerType) => {
+    setTimerStates(prev => ({ ...prev, [timerType]: 'running' }))
   }
 
-  const resetTimer = () => {
-    setTimerState('idle')
-    setTimeLeft(timerType === 'pomodoro' ? pomoDuration * 60 : deepWorkDuration * 60)
+  const resetTimer = (timerType: TimerType) => {
+    setTimerStates(prev => ({ ...prev, [timerType]: 'idle' }))
+    setTimesLeft(prev => ({
+      ...prev,
+      [timerType]: timerType === 'pomodoro' ? pomoDuration * 60 : deepWorkDuration * 60
+    }))
   }
 
-  const startBreak = () => {
-    setTimerState('break')
-    if (timerType === 'pomodoro') {
-      setTimeLeft((dailySessions.pomodoro % 4 === 0 ? pomoLongBreak : pomoShortBreak) * 60)
-    } else {
-      setTimeLeft(deepWorkBreak * 60)
-    }
+  const startBreak = (timerType: TimerType) => {
+    setTimerStates(prev => ({ ...prev, [timerType]: 'break' }))
+    setTimesLeft(prev => ({
+      ...prev,
+      [timerType]: timerType === 'pomodoro'
+        ? (dailySessions.pomodoro % 4 === 0 ? pomoLongBreak : pomoShortBreak) * 60
+        : deepWorkBreak * 60
+    }))
   }
 
   const formatTime = (seconds: number) => {
@@ -234,25 +249,25 @@ export default function TimersPage() {
           <CardContent>
             <motion.div
               className="text-8xl font-bold text-center mb-8"
-              key={timerType === 'pomodoro' ? timeLeft : 'pomo'}
+              key={timesLeft.pomodoro}
               initial={{ scale: 1.2, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ duration: 0.3 }}
             >
-              {timerType === 'pomodoro' && formatTime(timeLeft)}
+              {formatTime(timesLeft.pomodoro)}
             </motion.div>
             <div className="flex justify-center space-x-4">
-              {timerState === 'idle' && timerType === 'pomodoro' && (
-                <Button onClick={startTimer} size="lg" className="w-32">Démarrer</Button>
+              {timerStates.pomodoro === 'idle' && (
+                <Button onClick={() => startTimer('pomodoro')} size="lg" className="w-32">Démarrer</Button>
               )}
-              {timerState === 'running' && timerType === 'pomodoro' && (
-                <Button onClick={pauseTimer} size="lg" className="w-32">Pause</Button>
+              {timerStates.pomodoro === 'running' && (
+                <Button onClick={() => pauseTimer('pomodoro')} size="lg" className="w-32">Pause</Button>
               )}
-              {timerState === 'paused' && timerType === 'pomodoro' && (
-                <Button onClick={resumeTimer} size="lg" className="w-32">Reprendre</Button>
+              {timerStates.pomodoro === 'paused' && (
+                <Button onClick={() => resumeTimer('pomodoro')} size="lg" className="w-32">Reprendre</Button>
               )}
-              {timerState !== 'idle' && timerType === 'pomodoro' && (
-                <Button onClick={resetTimer} variant="outline" size="lg" className="w-32">Réinitialiser</Button>
+              {timerStates.pomodoro !== 'idle' && (
+                <Button onClick={() => resetTimer('pomodoro')} variant="outline" size="lg" className="w-32">Réinitialiser</Button>
               )}
             </div>
           </CardContent>
@@ -265,25 +280,25 @@ export default function TimersPage() {
           <CardContent>
             <motion.div
               className="text-8xl font-bold text-center mb-8"
-              key={timerType === 'deepWork' ? timeLeft : 'deep'}
+              key={timesLeft.deepWork}
               initial={{ scale: 1.2, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ duration: 0.3 }}
             >
-              {timerType === 'deepWork' && formatTime(timeLeft)}
+              {formatTime(timesLeft.deepWork)}
             </motion.div>
             <div className="flex justify-center space-x-4">
-              {timerState === 'idle' && timerType === 'deepWork' && (
-                <Button onClick={startTimer} size="lg" className="w-32">Démarrer</Button>
+              {timerStates.deepWork === 'idle' && (
+                <Button onClick={() => startTimer('deepWork')} size="lg" className="w-32">Démarrer</Button>
               )}
-              {timerState === 'running' && timerType === 'deepWork' && (
-                <Button onClick={pauseTimer} size="lg" className="w-32">Pause</Button>
+              {timerStates.deepWork === 'running' && (
+                <Button onClick={() => pauseTimer('deepWork')} size="lg" className="w-32">Pause</Button>
               )}
-              {timerState === 'paused' && timerType === 'deepWork' && (
-                <Button onClick={resumeTimer} size="lg" className="w-32">Reprendre</Button>
+              {timerStates.deepWork === 'paused' && (
+                <Button onClick={() => resumeTimer('deepWork')} size="lg" className="w-32">Reprendre</Button>
               )}
-              {timerState !== 'idle' && timerType === 'deepWork' && (
-                <Button onClick={resetTimer} variant="outline" size="lg" className="w-32">Réinitialiser</Button>
+              {timerStates.deepWork !== 'idle' && (
+                <Button onClick={() => resetTimer('deepWork')} variant="outline" size="lg" className="w-32">Réinitialiser</Button>
               )}
             </div>
           </CardContent>
@@ -327,7 +342,7 @@ export default function TimersPage() {
             </div>
             <div className="space-y-6">
               <div>
-              <label className="block mb-2 text-lg">Durée Deep Work: {deepWorkDuration} minutes</label>
+                <label className="block mb-2 text-lg">Durée Deep Work: {deepWorkDuration} minutes</label>
                 <Slider
                   value={[deepWorkDuration]}
                   onValueChange={(value) => setDeepWorkDuration(value[0])}
