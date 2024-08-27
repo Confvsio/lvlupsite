@@ -42,6 +42,7 @@ const TimerPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<'day' | 'week'>('day')
   const supabase = useSupabaseClient()
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const timerRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     audioRef.current = new Audio('/notification.mp3')
@@ -50,12 +51,17 @@ const TimerPage: React.FC = () => {
 
   useEffect(() => {
     if (activeTimer && timeLeft > 0) {
-      const timer = setInterval(() => {
+      timerRef.current = setInterval(() => {
         setTimeLeft(prev => prev - 1)
       }, 1000)
-      return () => clearInterval(timer)
     } else if (activeTimer && timeLeft === 0) {
       handleTimerComplete()
+    }
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+      }
     }
   }, [activeTimer, timeLeft])
 
@@ -82,12 +88,15 @@ const TimerPage: React.FC = () => {
       const { error } = await supabase.from('sessions').update({
         end_time: new Date().toISOString(),
         duration: actualDuration
-      }).eq('start_time', new Date(Date.now() - getTimerDuration(activeTimer) * 1000).toISOString())
+      }).eq('type', activeTimer).is('end_time', null)
       if (error) console.error('Erreur lors de l\'arrêt du minuteur:', error)
       else fetchAnalytics()
     }
     setActiveTimer(null)
     setTimeLeft(0)
+    if (timerRef.current) {
+      clearInterval(timerRef.current)
+    }
   }
 
   const handleTimerComplete = () => {
@@ -287,89 +296,93 @@ const TimerPage: React.FC = () => {
             </TabsList>
           </Tabs>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div>
-                <h3 className="text-xl mb-2 text-center">Distribution du Temps</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div>
+            <h3 className="text-xl mb-2 text-center">Distribution du Temps</h3>
+            <div className="flex items-center justify-center">
+              <ResponsiveContainer width={200} height={200}>
+                <PieChart>
                   <Pie
-                      data={pieChartData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    >
-                      {pieChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div>
-                <h3 className="text-xl mb-2 text-center">
-                  {viewMode === 'day' ? 'Chronologie Journalière' : 'Aperçu Hebdomadaire'}
-                </h3>
-                {viewMode === 'day' ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={analyticsData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="start_time" tickFormatter={(time) => format(new Date(time), 'HH:mm')} />
-                      <YAxis />
-                      <Tooltip labelFormatter={(label) => format(new Date(label), 'HH:mm')} />
-                      <Legend />
-                      <Line type="monotone" dataKey="duration" stroke="#8884d8" name="Durée (minutes)" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={weeklyData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis />
-                      <Tooltip />
-                      <Legend />
-                      <Bar dataKey="pomodoro" fill="#8884d8" name="Pomodoro" />
-                      <Bar dataKey="deepwork" fill="#82ca9d" name="Deepwork" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
+                    data={pieChartData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {pieChartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="ml-4">
+                {pieChartData.map((entry, index) => (
+                  <div key={index} className="flex items-center mb-2">
+                    <div className="w-4 h-4 mr-2" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
+                    <span>{entry.name}: {((entry.value / pieChartData.reduce((acc, curr) => acc + curr.value, 0)) * 100).toFixed(1)}%</span>
+                  </div>
+                ))}
               </div>
             </div>
+          </div>
+          <div>
+            <h3 className="text-xl mb-2 text-center">
+              {viewMode === 'day' ? 'Chronologie Journalière' : 'Aperçu Hebdomadaire'}
+            </h3>
+            {viewMode === 'day' ? (
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={analyticsData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="start_time" tickFormatter={(time) => format(new Date(time), 'HH:mm')} />
+                  <YAxis />
+                  <Tooltip labelFormatter={(label) => format(new Date(label), 'HH:mm')} />
+                  <Legend />
+                  <Line type="monotone" dataKey="duration" stroke="#8884d8" name="Durée (minutes)" />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={weeklyData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="pomodoro" fill="#8884d8" name="Pomodoro" />
+                  <Bar dataKey="deepwork" fill="#82ca9d" name="Deepwork" />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
           <div>
             <Calendar
               mode="single"
               selected={selectedDate}
               onSelect={(date) => setSelectedDate(date || new Date())}
-              className="rounded-md border mb-4"
+              className="rounded-md border"
               locale={fr}
             />
-            <div className="mt-4">
-              <h3 className="text-xl mb-2 text-center">Statistiques Rapides</h3>
-              <div className="grid grid-cols-2 gap-6 p-4 bg-gray-50 rounded-lg">
-                <div className="bg-white p-3 rounded shadow">
-                  <h4 className="font-semibold text-sm">Total Pomodoros</h4>
-                  <p className="text-lg">{analyticsData.filter(s => s.type === 'pomodoro').length}</p>
-                </div>
-                <div className="bg-white p-3 rounded shadow">
-                  <h4 className="font-semibold text-sm">Total Deepwork</h4>
-                  <p className="text-lg">{analyticsData.filter(s => s.type === 'deepwork').length}</p>
-                </div>
-                <div className="bg-white p-3 rounded shadow">
-                  <h4 className="font-semibold text-sm">Temps Productif</h4>
-                  <p className="text-lg">{formatTime(getTotalDuration('pomodoro') + getTotalDuration('deepwork'))}</p>
-                </div>
-                <div className="bg-white p-3 rounded shadow">
-                  <h4 className="font-semibold text-sm">Temps de Pause</h4>
-                  <p className="text-lg">{formatTime(getTotalDuration('shortbreak') + getTotalDuration('longbreak'))}</p>
-                </div>
+          </div>
+          <div>
+            <h3 className="text-xl mb-2 text-center">Statistiques Rapides</h3>
+            <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
+              <div className="bg-white p-3 rounded shadow">
+                <h4 className="font-semibold text-sm">Total Pomodoros</h4>
+                <p className="text-lg">{analyticsData.filter(s => s.type === 'pomodoro').length}</p>
+              </div>
+              <div className="bg-white p-3 rounded shadow">
+                <h4 className="font-semibold text-sm">Total Deepwork</h4>
+                <p className="text-lg">{analyticsData.filter(s => s.type === 'deepwork').length}</p>
+              </div>
+              <div className="bg-white p-3 rounded shadow">
+                <h4 className="font-semibold text-sm">Temps Productif</h4>
+                <p className="text-lg">{formatTime(getTotalDuration('pomodoro') + getTotalDuration('deepwork'))}</p>
+              </div>
+              <div className="bg-white p-3 rounded shadow">
+                <h4 className="font-semibold text-sm">Temps de Pause</h4>
+                <p className="text-lg">{formatTime(getTotalDuration('shortbreak') + getTotalDuration('longbreak'))}</p>
               </div>
             </div>
           </div>
