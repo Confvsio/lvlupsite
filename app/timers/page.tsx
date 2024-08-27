@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts'
+import { ClockIcon, FireIcon, CalendarIcon, TrophyIcon } from '@heroicons/react/24/solid'
 import debounce from 'lodash/debounce'
 
 type TimerType = 'pomodoro' | 'deepWork'
@@ -103,25 +104,29 @@ export default function TimersPage() {
   }, [user])
 
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null
-    if (timerStates[activeTimer] === 'running') {
-      interval = setInterval(() => {
-        setTimesLeft((prevTimes) => {
-          const newTimes = { ...prevTimes }
-          if (newTimes[activeTimer] <= 1) {
-            clearInterval(interval!)
-            handleTimerComplete(activeTimer)
+    const timerTypes: TimerType[] = ['pomodoro', 'deepWork']
+    const intervals: NodeJS.Timeout[] = []
+
+    timerTypes.forEach((type) => {
+      if (timerStates[type] === 'running') {
+        const interval = setInterval(() => {
+          setTimesLeft((prevTimes) => {
+            const newTimes = { ...prevTimes }
+            if (newTimes[type] <= 1) {
+              clearInterval(interval)
+              handleTimerComplete(type)
+              return newTimes
+            }
+            newTimes[type] -= 1
             return newTimes
-          }
-          newTimes[activeTimer] -= 1
-          return newTimes
-        })
-      }, 1000)
-    }
-    return () => {
-      if (interval) clearInterval(interval)
-    }
-  }, [timerStates, activeTimer])
+          })
+        }, 1000)
+        intervals.push(interval)
+      }
+    })
+
+    return () => intervals.forEach(clearInterval)
+  }, [timerStates])
 
   useEffect(() => {
     setTimesLeft({
@@ -130,11 +135,7 @@ export default function TimersPage() {
     })
   }, [pomoDuration, deepWorkDuration])
 
-  useEffect(() => {
-    debouncedUpdateUserData()
-  }, [pomoDuration, deepWorkDuration, pomoShortBreak, pomoLongBreak, deepWorkBreak, autoBreak, soundEnabled, dailySessions, weeklySessions, totalFocusTime, longestStreak, weeklyData])
-
-  const handleTimerComplete = (timerType: TimerType) => {
+  const handleTimerComplete = useCallback((timerType: TimerType) => {
     if (soundEnabled) {
       playNotificationSound()
     }
@@ -144,51 +145,51 @@ export default function TimersPage() {
       setTimerStates(prev => ({ ...prev, [timerType]: 'idle' }))
     }
     updateSessionCount(timerType)
-  }
+  }, [soundEnabled, autoBreak])
 
   const updateSessionCount = useCallback((timerType: TimerType) => {
-    const newDailySessions = {
-      ...dailySessions,
-      [timerType]: dailySessions[timerType] + 1
-    }
-    const newWeeklySessions = {
-      ...weeklySessions,
-      [timerType]: weeklySessions[timerType] + 1
-    }
-    const newTotalFocusTime = {
-      ...totalFocusTime,
-      [timerType]: totalFocusTime[timerType] + (timerType === 'pomodoro' ? pomoDuration : deepWorkDuration)
-    }
-    const newLongestStreak = {
-      ...longestStreak,
-      [timerType]: Math.max(longestStreak[timerType], newDailySessions[timerType])
-    }
-
-    setDailySessions(newDailySessions)
-    setWeeklySessions(newWeeklySessions)
-    setTotalFocusTime(newTotalFocusTime)
-    setLongestStreak(newLongestStreak)
+    setDailySessions(prev => ({
+      ...prev,
+      [timerType]: prev[timerType] + 1
+    }))
+    setWeeklySessions(prev => ({
+      ...prev,
+      [timerType]: prev[timerType] + 1
+    }))
+    setTotalFocusTime(prev => ({
+      ...prev,
+      [timerType]: prev[timerType] + (timerType === 'pomodoro' ? pomoDuration : deepWorkDuration)
+    }))
+    setLongestStreak(prev => ({
+      ...prev,
+      [timerType]: Math.max(prev[timerType], dailySessions[timerType] + 1)
+    }))
 
     const today = new Date().toISOString().split('T')[0]
-    const updatedWeeklyData = [...weeklyData]
-    const todayIndex = updatedWeeklyData.findIndex(d => d.date === today)
-    if (todayIndex !== -1) {
-      updatedWeeklyData[todayIndex] = {
-        ...updatedWeeklyData[todayIndex],
-        [timerType]: (updatedWeeklyData[todayIndex][timerType] || 0) + 1,
-        productivity: calculateProductivity(updatedWeeklyData[todayIndex])
+    setWeeklyData(prev => {
+      const updatedData = [...prev]
+      const todayIndex = updatedData.findIndex(d => d.date === today)
+      if (todayIndex !== -1) {
+        updatedData[todayIndex] = {
+          ...updatedData[todayIndex],
+          [timerType]: (updatedData[todayIndex][timerType] || 0) + 1,
+          productivity: calculateProductivity({
+            ...updatedData[todayIndex],
+            [timerType]: (updatedData[todayIndex][timerType] || 0) + 1
+          })
+        }
+      } else {
+        updatedData.push({ 
+          date: today, 
+          [timerType]: 1,
+          productivity: calculateProductivity({ [timerType]: 1 })
+        })
       }
-    } else {
-      updatedWeeklyData.push({ 
-        date: today, 
-        [timerType]: 1,
-        productivity: calculateProductivity({ [timerType]: 1 })
-      })
-    }
-    setWeeklyData(updatedWeeklyData)
+      return updatedData
+    })
 
-    updateUserData()
-  }, [dailySessions, weeklySessions, totalFocusTime, longestStreak, pomoDuration, deepWorkDuration, weeklyData, updateUserData])
+    debouncedUpdateUserData()
+  }, [dailySessions, pomoDuration, deepWorkDuration, debouncedUpdateUserData])
 
   const calculateProductivity = (dayData: any) => {
     const totalSessions = (dayData.pomodoro || 0) + (dayData.deepWork || 0)
@@ -238,72 +239,78 @@ export default function TimersPage() {
   }
 
   return (
-    <div className="container mx-auto p-8 max-w-6xl">
+    <div className="container mx-auto p-8 max-w-7xl">
       <h1 className="text-5xl font-bold mb-12 text-center text-gray-800">Minuteries de Productivité</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-3xl">Pomodoro</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <motion.div
-              className="text-8xl font-bold text-center mb-8"
-              key={timesLeft.pomodoro}
-              initial={{ scale: 1.2, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 0.3 }}
-            >
-              {formatTime(timesLeft.pomodoro)}
-            </motion.div>
-            <div className="flex justify-center space-x-4">
-              {timerStates.pomodoro === 'idle' && (
-                <Button onClick={() => startTimer('pomodoro')} size="lg" className="w-32">Démarrer</Button>
-              )}
-              {timerStates.pomodoro === 'running' && (
-                <Button onClick={() => pauseTimer('pomodoro')} size="lg" className="w-32">Pause</Button>
-              )}
-              {timerStates.pomodoro === 'paused' && (
-                <Button onClick={() => resumeTimer('pomodoro')} size="lg" className="w-32">Reprendre</Button>
-              )}
-              {timerStates.pomodoro !== 'idle' && (
-                <Button onClick={() => resetTimer('pomodoro')} variant="outline" size="lg" className="w-32">Réinitialiser</Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-3xl">Deep Work</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <motion.div
-              className="text-8xl font-bold text-center mb-8"
-              key={timesLeft.deepWork}
-              initial={{ scale: 1.2, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 0.3 }}
-            >
-              {formatTime(timesLeft.deepWork)}
-            </motion.div>
-            <div className="flex justify-center space-x-4">
-              {timerStates.deepWork === 'idle' && (
-                <Button onClick={() => startTimer('deepWork')} size="lg" className="w-32">Démarrer</Button>
-              )}
-              {timerStates.deepWork === 'running' && (
-                <Button onClick={() => pauseTimer('deepWork')} size="lg" className="w-32">Pause</Button>
-              )}
-              {timerStates.deepWork === 'paused' && (
-                <Button onClick={() => resumeTimer('deepWork')} size="lg" className="w-32">Reprendre</Button>
-              )}
-              {timerStates.deepWork !== 'idle' && (
-                <Button onClick={() => resetTimer('deepWork')} variant="outline" size="lg" className="w-32">Réinitialiser</Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        {['pomodoro', 'deepWork'].map((type) => (
+          <Card key={type} className="shadow-lg">
+            <CardHeader>
+              <CardTitle className="text-3xl">{type === 'pomodoro' ? 'Pomodoro' : 'Deep Work'}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <motion.div
+                className="text-8xl font-bold text-center mb-8"
+                key={timesLeft[type as TimerType]}
+                initial={{ scale: 1.2, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: 0.3 }}
+              >
+                {formatTime(timesLeft[type as TimerType])}
+              </motion.div>
+              <div className="flex justify-center space-x-4">
+                {timerStates[type as TimerType] === 'idle' && (
+                  <Button onClick={() => startTimer(type as TimerType)} size="lg" className="w-32">Démarrer</Button>
+                )}
+                {timerStates[type as TimerType] === 'running' && (
+                  <Button onClick={() => pauseTimer(type as TimerType)} size="lg" className="w-32">Pause</Button>
+                )}
+                {timerStates[type as TimerType] === 'paused' && (
+                  <Button onClick={() => resumeTimer(type as TimerType)} size="lg" className="w-32">Reprendre</Button>
+                )}
+                {timerStates[type as TimerType] !== 'idle' && (
+                  <Button onClick={() => resetTimer(type as TimerType)} variant="outline" size="lg" className="w-32">Réinitialiser</Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
+
+      <Card className="shadow-lg mb-12">
+        <CardHeader>
+          <CardTitle className="text-3xl">Statistiques</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            <StatCard
+              icon={<ClockIcon className="h-8 w-8 text-blue-500" />}
+              title="Sessions aujourd'hui"
+              pomodoro={dailySessions.pomodoro}
+              deepWork={dailySessions.deepWork}
+            />
+            <StatCard
+              icon={<CalendarIcon className="h-8 w-8 text-green-500" />}
+              title="Sessions cette semaine"
+              pomodoro={weeklySessions.pomodoro}
+              deepWork={weeklySessions.deepWork}
+            />
+            <StatCard
+              icon={<FireIcon className="h-8 w-8 text-red-500" />}
+              title="Temps total de concentration"
+              pomodoro={totalFocusTime.pomodoro}
+              deepWork={totalFocusTime.deepWork}
+              format="time"
+            />
+            <StatCard
+              icon={<TrophyIcon className="h-8 w-8 text-yellow-500" />}
+              title="Plus longue série"
+              pomodoro={longestStreak.pomodoro}
+              deepWork={longestStreak.deepWork}
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="shadow-lg mb-12">
         <CardHeader>
@@ -378,36 +385,6 @@ export default function TimersPage() {
         </CardContent>
       </Card>
 
-      <Card className="shadow-lg mb-12">
-        <CardHeader>
-          <CardTitle className="text-3xl">Statistiques</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            <div>
-              <p className="text-lg font-semibold mb-2">Sessions aujourd'hui</p>
-              <p className="text-3xl">Pomodoro: {dailySessions.pomodoro}</p>
-              <p className="text-3xl">Deep Work: {dailySessions.deepWork}</p>
-            </div>
-            <div>
-              <p className="text-lg font-semibold mb-2">Sessions cette semaine</p>
-              <p className="text-3xl">Pomodoro: {weeklySessions.pomodoro}</p>
-              <p className="text-3xl">Deep Work: {weeklySessions.deepWork}</p>
-            </div>
-            <div>
-              <p className="text-lg font-semibold mb-2">Temps total de concentration</p>
-              <p className="text-3xl">Pomodoro: {Math.floor(totalFocusTime.pomodoro / 60)}h {totalFocusTime.pomodoro % 60}m</p>
-              <p className="text-3xl">Deep Work: {Math.floor(totalFocusTime.deepWork / 60)}h {totalFocusTime.deepWork % 60}m</p>
-            </div>
-            <div>
-              <p className="text-lg font-semibold mb-2">Plus longue série</p>
-              <p className="text-3xl">Pomodoro: {longestStreak.pomodoro}</p>
-              <p className="text-3xl">Deep Work: {longestStreak.deepWork}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle className="text-3xl">Analyses</CardTitle>
@@ -468,6 +445,42 @@ export default function TimersPage() {
           </Tabs>
         </CardContent>
       </Card>
+    </div>
+  )
+}
+
+interface StatCardProps {
+  icon: React.ReactNode;
+  title: string;
+  pomodoro: number;
+  deepWork: number;
+  format?: 'number' | 'time';
+}
+
+function StatCard({ icon, title, pomodoro, deepWork, format = 'number' }: StatCardProps) {
+  const formatValue = (value: number) => {
+    if (format === 'time') {
+      const hours = Math.floor(value / 60)
+      const minutes = value % 60
+      return `${hours}h ${minutes}m`
+    }
+    return value
+  }
+
+  return (
+    <div className="bg-white p-6 rounded-lg shadow-md">
+      <div className="flex items-center mb-4">
+        {icon}
+        <h3 className="text-lg font-semibold ml-2">{title}</h3>
+      </div>
+      <div className="space-y-2">
+        <p className="text-sm">
+          <span className="font-medium text-red-600">Pomodoro:</span> {formatValue(pomodoro)}
+        </p>
+        <p className="text-sm">
+          <span className="font-medium text-blue-600">Deep Work:</span> {formatValue(deepWork)}
+        </p>
+      </div>
     </div>
   )
 }
