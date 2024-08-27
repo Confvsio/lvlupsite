@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useForm, SubmitHandler } from 'react-hook-form'
 import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react'
 import { PlusIcon, CalendarIcon, BookOpenIcon, TagIcon, MagnifyingGlassIcon, PencilIcon, TrashIcon, XMarkIcon } from '@heroicons/react/24/outline'
@@ -26,10 +26,14 @@ export default function JournalingPage() {
   const [isEditing, setIsEditing] = useState(false)
   const [activeTab, setActiveTab] = useState<'all' | 'calendar' | 'tags'>('all')
   const [searchTerm, setSearchTerm] = useState('')
+  const [selectedTag, setSelectedTag] = useState<string | null>(null)
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const { register, handleSubmit, formState: { errors }, reset, setValue } = useForm<Inputs>()
+  const { register, handleSubmit, formState: { errors }, reset, setValue, watch } = useForm<Inputs>()
   const user = useUser()
   const supabase = useSupabaseClient()
+
+  const watchedFields = watch()
 
   useEffect(() => {
     if (user) {
@@ -114,11 +118,30 @@ export default function JournalingPage() {
     }
   }
 
-  const filteredEntries = entries.filter(entry =>
-    entry.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    entry.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    entry.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
-  )
+  const filteredEntries = useMemo(() => {
+    return entries.filter(entry => {
+      const matchesSearch = entry.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        entry.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        entry.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+
+      const matchesTag = !selectedTag || entry.tags.includes(selectedTag)
+      const matchesDate = !selectedDate || entry.date === selectedDate
+
+      return matchesSearch && matchesTag && matchesDate
+    })
+  }, [entries, searchTerm, selectedTag, selectedDate])
+
+  const allTags = useMemo(() => {
+    const tags = new Set<string>()
+    entries.forEach(entry => entry.tags.forEach(tag => tags.add(tag)))
+    return Array.from(tags).sort()
+  }, [entries])
+
+  const allDates = useMemo(() => {
+    const dates = new Set<string>()
+    entries.forEach(entry => dates.add(entry.date))
+    return Array.from(dates).sort().reverse()
+  }, [entries])
 
   if (isLoading) {
     return <LoadingSpinner />
@@ -169,6 +192,34 @@ export default function JournalingPage() {
           />
           <MagnifyingGlassIcon className="h-5 w-5 text-gray-400 absolute left-3 top-3" />
         </div>
+        {activeTab === 'calendar' && (
+          <div className="mb-4">
+            <select
+              value={selectedDate || ''}
+              onChange={(e) => setSelectedDate(e.target.value || null)}
+              className="w-full p-2 border rounded-md"
+            >
+              <option value="">Toutes les dates</option>
+              {allDates.map(date => (
+                <option key={date} value={date}>{date}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        {activeTab === 'tags' && (
+          <div className="mb-4">
+            <select
+              value={selectedTag || ''}
+              onChange={(e) => setSelectedTag(e.target.value || null)}
+              className="w-full p-2 border rounded-md"
+            >
+              <option value="">Tous les tags</option>
+              {allTags.map(tag => (
+                <option key={tag} value={tag}>{tag}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="space-y-2">
           {filteredEntries.map(entry => (
             <div
@@ -258,6 +309,23 @@ export default function JournalingPage() {
           </form>
         )}
       </div>
+
+      {/* Preview panel */}
+      {isEditing && (
+        <div className="hidden lg:block w-1/3 bg-gray-50 p-6 overflow-y-auto">
+          <h3 className="text-lg font-semibold mb-4">Aperçu</h3>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">{watchedFields.title || 'Titre de l\'entrée'}</h2>
+          <p className="text-gray-600 mb-4">{new Date().toISOString().split('T')[0]}</p>
+          <p className="whitespace-pre-wrap text-gray-700 mb-4">{watchedFields.content || 'Contenu de l\'entrée'}</p>
+          <div className="flex flex-wrap gap-2">
+            {watchedFields.tags?.split(',').map(tag => tag.trim()).filter(Boolean).map(tag => (
+              <span key={tag} className="inline-block bg-indigo-100 text-indigo-800 rounded-full px-3 py-1 text-sm font-semibold">
+                {tag}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
