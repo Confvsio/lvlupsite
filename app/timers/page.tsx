@@ -44,6 +44,7 @@ const TimerPage: React.FC = () => {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const startTimeRef = useRef<Date | null>(null)
+  const [activeSessionStart, setActiveSessionStart] = useState<Date | null>(null);
 
   useEffect(() => {
     audioRef.current = new Audio('/notification.mp3')
@@ -71,34 +72,35 @@ const TimerPage: React.FC = () => {
   }, [selectedDate, viewMode])
 
   const startTimer = async (type: 'pomodoro' | 'deepwork' | 'shortbreak' | 'longbreak') => {
-    setActiveTimer(type)
-    setTimeLeft(getTimerDuration(type))
-    startTimeRef.current = new Date()
+    const startTime = new Date();
+    setActiveTimer(type);
+    setTimeLeft(getTimerDuration(type));
+    setActiveSessionStart(startTime);
     const { data, error } = await supabase.from('sessions').insert({
       type: type,
-      start_time: startTimeRef.current.toISOString(),
+      start_time: startTime.toISOString(),
       duration: 0,
       task_name: taskName
-    }).select()
-    if (error) console.error('Erreur lors du démarrage du minuteur:', error)
+    }).select();
+    if (error) console.error('Erreur lors du démarrage du minuteur:', error);
   }
 
   const stopTimer = async () => {
-    if (activeTimer && startTimeRef.current) {
-      const endTime = new Date()
-      const actualDuration = (endTime.getTime() - startTimeRef.current.getTime()) / 60000 // Convert to minutes
+    if (activeTimer && activeSessionStart) {
+      const endTime = new Date();
+      const actualDuration = (endTime.getTime() - activeSessionStart.getTime()) / 60000; // Convert to minutes
       const { error } = await supabase.from('sessions').update({
         end_time: endTime.toISOString(),
         duration: actualDuration
-      }).eq('start_time', startTimeRef.current.toISOString())
-      if (error) console.error('Erreur lors de l\'arrêt du minuteur:', error)
-      else fetchAnalytics()
+      }).eq('start_time', activeSessionStart.toISOString());
+      if (error) console.error('Erreur lors de l\'arrêt du minuteur:', error);
+      else fetchAnalytics();
     }
-    setActiveTimer(null)
-    setTimeLeft(0)
-    startTimeRef.current = null
+    setActiveTimer(null);
+    setTimeLeft(0);
+    setActiveSessionStart(null);
     if (timerRef.current) {
-      clearInterval(timerRef.current)
+      clearInterval(timerRef.current);
     }
   }
 
@@ -344,29 +346,35 @@ const TimerPage: React.FC = () => {
           </div>
         </div>
         <div className="mt-8">
-          <h3 className="text-xl mb-2 text-center">Résumé des Sessions</h3>
-          <ul className="space-y-2 max-h-60 overflow-y-auto">
-            {analyticsData.map((session, index) => (
-              <li key={index} className="bg-gray-100 p-2 rounded flex justify-between items-center">
-                <span>
-                  <span className="font-semibold">{format(new Date(session.start_time), 'HH:mm', { locale: fr })}</span>
-                  <span className="ml-2">{
-                    session.type === 'pomodoro' ? 'Pomodoro' :
-                    session.type === 'deepwork' ? 'Deepwork' :
-                    session.type === 'shortbreak' ? 'Pause Courte' : 'Pause Longue'
-                  }</span>
-                </span>
-                <span>
-                  {Math.floor(session.duration)}:{Math.round((session.duration % 1) * 60).toString().padStart(2, '0')}
-                  {session.task_name && <span className="ml-2 text-gray-600">({session.task_name})</span>}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
+      <h3 className="text-xl mb-2 text-center">Résumé des Sessions</h3>
+      <ul className="space-y-2 max-h-60 overflow-y-auto">
+        {analyticsData.map((session, index) => (
+          <li key={index} className="bg-gray-100 p-2 rounded flex justify-between items-center">
+            <span>
+              <span className="font-semibold">{format(new Date(session.start_time), 'HH:mm', { locale: fr })}</span>
+              <span className="ml-2">{
+                session.type === 'pomodoro' ? 'Pomodoro' :
+                session.type === 'deepwork' ? 'Deepwork' :
+                session.type === 'shortbreak' ? 'Pause Courte' : 'Pause Longue'
+              }</span>
+            </span>
+            <span>
+              {formatDuration(session.duration)}
+              {session.task_name && <span className="ml-2 text-gray-600">({session.task_name})</span>}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
       </div>
     </div>
   )
 }
+
+const formatDuration = (duration: number): string => {
+    const minutes = Math.floor(duration);
+    const seconds = Math.round((duration - minutes) * 60);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  }
 
 export default TimerPage
