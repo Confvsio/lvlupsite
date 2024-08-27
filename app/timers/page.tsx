@@ -1,445 +1,314 @@
-// app/timers/page.tsx
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Slider } from "@/components/ui/slider"
+import { useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
+import { gsap } from 'gsap'
+import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react'
 import { Button } from "@/components/ui/button"
+import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
-import { Input } from "@/components/ui/input"
-import { useSupabaseClient, useUser } from '@supabase/auth-helpers-react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
-import { Calendar } from "@/components/ui/calendar"
-import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay } from 'date-fns'
-import { fr } from 'date-fns/locale'
-import { Settings, Play, Pause, RotateCcw } from 'lucide-react'
-import { toast, Toaster } from 'react-hot-toast'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
-interface TimerSession {
-  id: string
-  user_id: string
-  type: 'pomodoro' | 'deepwork' | 'shortbreak' | 'longbreak'
-  start_time: string
-  end_time: string | null
-  duration: number
-  task_name: string
-}
+type TimerType = 'pomodoro' | 'deepWork'
+type TimerState = 'idle' | 'running' | 'paused' | 'break'
 
-const COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A']
+export default function TimersPage() {
+  const [timerType, setTimerType] = useState<TimerType>('pomodoro')
+  const [timerState, setTimerState] = useState<TimerState>('idle')
+  const [timeLeft, setTimeLeft] = useState(25 * 60)
+  const [pomoDuration, setPomoDuration] = useState(25)
+  const [deepWorkDuration, setDeepWorkDuration] = useState(60)
+  const [shortBreakDuration, setShortBreakDuration] = useState(5)
+  const [longBreakDuration, setLongBreakDuration] = useState(15)
+  const [autoBreak, setAutoBreak] = useState(false)
+  const [notificationSound, setNotificationSound] = useState('notification.mp3')
+  const [dailySessions, setDailySessions] = useState(0)
+  const [weeklySessions, setWeeklySessions] = useState(0)
 
-const TimerPage: React.FC = () => {
-  const [timerSettings, setTimerSettings] = useState({
-    pomodoro: 25,
-    deepwork: 60,
-    shortbreak: 5,
-    longbreak: 15,
-  })
-  const [activeTimer, setActiveTimer] = useState<TimerSession | null>(null)
-  const [timeLeft, setTimeLeft] = useState(0)
-  const [isRunning, setIsRunning] = useState(false)
-  const [autoStartBreaks, setAutoStartBreaks] = useState(false)
-  const [soundEnabled, setSoundEnabled] = useState(true)
-  const [taskName, setTaskName] = useState('')
-  const [sessions, setSessions] = useState<TimerSession[]>([])
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date())
-  const [showSettings, setShowSettings] = useState(false)
-  const [viewMode, setViewMode] = useState<'day' | 'week'>('day')
-  const supabase = useSupabaseClient()
   const user = useUser()
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const supabase = useSupabaseClient()
 
   useEffect(() => {
-    audioRef.current = new Audio('/notification.mp3')
-    if (user) fetchSessions()
+    if (user) {
+      fetchUserData()
+    }
   }, [user])
 
   useEffect(() => {
-    if (isRunning && timeLeft > 0) {
-      intervalRef.current = setInterval(() => {
-        setTimeLeft(prev => prev - 1)
+    let interval: NodeJS.Timeout | null = null
+    if (timerState === 'running') {
+      interval = setInterval(() => {
+        setTimeLeft((prevTime) => {
+          if (prevTime <= 1) {
+            clearInterval(interval!)
+            handleTimerComplete()
+            return 0
+          }
+          return prevTime - 1
+        })
       }, 1000)
-    } else if (isRunning && timeLeft === 0) {
-      handleTimerComplete()
     }
-
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current)
+      if (interval) clearInterval(interval)
     }
-  }, [isRunning, timeLeft])
+  }, [timerState])
 
-  useEffect(() => {
-    if (user) fetchSessions()
-  }, [selectedDate, viewMode, user])
-
-  const fetchSessions = async () => {
-    if (!user) return
-
-    let startDate, endDate
-    if (viewMode === 'day') {
-      startDate = new Date(selectedDate)
-      startDate.setHours(0, 0, 0, 0)
-      endDate = new Date(selectedDate)
-      endDate.setHours(23, 59, 59, 999)
-    } else {
-      startDate = startOfWeek(selectedDate, { weekStartsOn: 1 })
-      endDate = endOfWeek(selectedDate, { weekStartsOn: 1 })
-    }
-
+  const fetchUserData = async () => {
     const { data, error } = await supabase
-      .from('timer_sessions')
+      .from('user_timer_data')
       .select('*')
-      .eq('user_id', user.id)
-      .gte('start_time', startDate.toISOString())
-      .lte('start_time', endDate.toISOString())
-      .order('start_time', { ascending: true })
-
-    if (error) {
-      console.error('Error fetching sessions:', error)
-      toast.error('Failed to fetch sessions')
-      return
-    }
-
-    setSessions(data as TimerSession[])
-  }
-
-  const startTimer = async (type: 'pomodoro' | 'deepwork' | 'shortbreak' | 'longbreak') => {
-    if (!user) {
-      toast.error('Please log in to start a timer')
-      return
-    }
-
-    const newSession: TimerSession = {
-      id: Date.now().toString(),
-      user_id: user.id,
-      type,
-      start_time: new Date().toISOString(),
-      end_time: null,
-      duration: 0,
-      task_name: taskName,
-    }
-
-    const { data, error } = await supabase
-      .from('timer_sessions')
-      .insert(newSession)
-      .select()
+      .eq('user_id', user!.id)
       .single()
 
     if (error) {
-      console.error('Error starting timer:', error)
-      toast.error('Failed to start timer')
-      return
+      console.error('Erreur lors de la récupération des données utilisateur:', error)
+    } else if (data) {
+      setPomoDuration(data.pomo_duration)
+      setDeepWorkDuration(data.deep_work_duration)
+      setShortBreakDuration(data.short_break_duration)
+      setLongBreakDuration(data.long_break_duration)
+      setAutoBreak(data.auto_break)
+      setNotificationSound(data.notification_sound)
+      setDailySessions(data.daily_sessions)
+      setWeeklySessions(data.weekly_sessions)
     }
-
-    setActiveTimer(data)
-    setTimeLeft(timerSettings[type] * 60)
-    setIsRunning(true)
-    toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} timer started`)
   }
 
-  const stopTimer = async () => {
-    if (!activeTimer) return
-
-    const endTime = new Date()
-    const duration = (endTime.getTime() - new Date(activeTimer.start_time).getTime()) / 60000
-
+  const updateUserData = async () => {
     const { error } = await supabase
-      .from('timer_sessions')
-      .update({
-        end_time: endTime.toISOString(),
-        duration: duration,
+      .from('user_timer_data')
+      .upsert({
+        user_id: user!.id,
+        pomo_duration: pomoDuration,
+        deep_work_duration: deepWorkDuration,
+        short_break_duration: shortBreakDuration,
+        long_break_duration: longBreakDuration,
+        auto_break: autoBreak,
+        notification_sound: notificationSound,
+        daily_sessions: dailySessions,
+        weekly_sessions: weeklySessions,
       })
-      .eq('id', activeTimer.id)
 
     if (error) {
-      console.error('Error stopping timer:', error)
-      toast.error('Failed to stop timer')
-      return
+      console.error('Erreur lors de la mise à jour des données utilisateur:', error)
     }
-
-    setActiveTimer(null)
-    setIsRunning(false)
-    setTimeLeft(0)
-    fetchSessions()
-    toast.success('Timer stopped')
-  }
-
-  const pauseTimer = () => {
-    setIsRunning(false)
-  }
-
-  const resumeTimer = () => {
-    setIsRunning(true)
-  }
-
-  const resetTimer = () => {
-    if (activeTimer) {
-      setTimeLeft(timerSettings[activeTimer.type] * 60)
-    }
-    setIsRunning(false)
   }
 
   const handleTimerComplete = () => {
-    if (soundEnabled && audioRef.current) {
-      audioRef.current.play()
+    playNotificationSound()
+    if (autoBreak) {
+      startBreak()
+    } else {
+      setTimerState('idle')
     }
-    stopTimer()
-    toast.success('Timer completed!')
-    if (autoStartBreaks && activeTimer?.type === 'pomodoro') {
-      startTimer('shortbreak')
-    }
+    updateSessionCount()
+  }
+
+  const updateSessionCount = () => {
+    setDailySessions((prev) => prev + 1)
+    setWeeklySessions((prev) => prev + 1)
+    updateUserData()
+  }
+
+  const playNotificationSound = () => {
+    const audio = new Audio(notificationSound)
+    audio.play()
+  }
+
+  const startTimer = () => {
+    setTimerState('running')
+    setTimeLeft(timerType === 'pomodoro' ? pomoDuration * 60 : deepWorkDuration * 60)
+  }
+
+  const pauseTimer = () => {
+    setTimerState('paused')
+  }
+
+  const resumeTimer = () => {
+    setTimerState('running')
+  }
+
+  const resetTimer = () => {
+    setTimerState('idle')
+    setTimeLeft(timerType === 'pomodoro' ? pomoDuration * 60 : deepWorkDuration * 60)
+  }
+
+  const startBreak = () => {
+    setTimerState('break')
+    setTimeLeft(shortBreakDuration * 60)
   }
 
   const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60)
-    const remainingSeconds = seconds % 60
-    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`
-  }
-
-  const getTotalDuration = (type: string) => {
-    return sessions
-      .filter(session => session.type === type)
-      .reduce((acc, session) => acc + session.duration, 0)
-  }
-
-  const pieChartData = [
-    { name: 'Pomodoro', value: getTotalDuration('pomodoro') },
-    { name: 'Deepwork', value: getTotalDuration('deepwork') },
-    { name: 'Short Break', value: getTotalDuration('shortbreak') },
-    { name: 'Long Break', value: getTotalDuration('longbreak') },
-  ].filter(item => item.value > 0)
-
-  const getChartData = () => {
-    if (viewMode === 'day') {
-      return sessions.map(session => ({
-        time: format(new Date(session.start_time), 'HH:mm'),
-        duration: session.duration,
-        type: session.type,
-      }))
-    } else {
-      const weekDays = eachDayOfInterval({
-        start: startOfWeek(selectedDate, { weekStartsOn: 1 }),
-        end: endOfWeek(selectedDate, { weekStartsOn: 1 }),
-      })
-
-      return weekDays.map(day => {
-        const daySessions = sessions.filter(session => 
-          isSameDay(new Date(session.start_time), day)
-        )
-        return {
-          day: format(day, 'EEE', { locale: fr }),
-          pomodoro: daySessions.filter(s => s.type === 'pomodoro').reduce((acc, s) => acc + s.duration, 0),
-          deepwork: daySessions.filter(s => s.type === 'deepwork').reduce((acc, s) => acc + s.duration, 0),
-          shortbreak: daySessions.filter(s => s.type === 'shortbreak').reduce((acc, s) => acc + s.duration, 0),
-          longbreak: daySessions.filter(s => s.type === 'longbreak').reduce((acc, s) => acc + s.duration, 0),
-        }
-      })
-    }
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-100 p-8">
-      <Toaster position="top-right" />
-      <div className="max-w-6xl mx-auto">
-        <h1 className="text-4xl font-bold mb-8 text-center text-indigo-900">Productivity Timer</h1>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
-              <div className="text-center mb-6">
-                <h2 className="text-3xl font-semibold text-indigo-700">
-                  {activeTimer ? activeTimer.type.charAt(0).toUpperCase() + activeTimer.type.slice(1) : 'Ready to focus?'}
-                </h2>
-                <p className="text-7xl font-bold my-6 text-indigo-600">{formatTime(timeLeft)}</p>
-                {activeTimer && (
-                  <p className="text-indigo-500 mb-4">
-                    Task: {activeTimer.task_name || 'No task specified'}
-                  </p>
+    <div className="container mx-auto p-4">
+      <h1 className="text-3xl font-bold mb-8 text-center">Minuteries de Productivité</h1>
+
+      <Tabs defaultValue="pomodoro" className="mb-8">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="pomodoro" onClick={() => setTimerType('pomodoro')}>Pomodoro</TabsTrigger>
+          <TabsTrigger value="deepWork" onClick={() => setTimerType('deepWork')}>Deep Work</TabsTrigger>
+        </TabsList>
+        <TabsContent value="pomodoro">
+          <Card>
+            <CardHeader>
+              <CardTitle>Minuterie Pomodoro</CardTitle>
+              <CardDescription>Concentrez-vous pendant 25 minutes, puis faites une courte pause.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <motion.div
+                className="text-6xl font-bold text-center mb-4"
+                key={timeLeft}
+                initial={{ scale: 1.2 }}
+                animate={{ scale: 1 }}
+                transition={{ duration: 0.3 }}
+              >
+                {formatTime(timeLeft)}
+              </motion.div>
+              <div className="flex justify-center space-x-4 mb-4">
+                {timerState === 'idle' && (
+                  <Button onClick={startTimer}>Démarrer</Button>
+                )}
+                {timerState === 'running' && (
+                  <Button onClick={pauseTimer}>Pause</Button>
+                )}
+                {timerState === 'paused' && (
+                  <Button onClick={resumeTimer}>Reprendre</Button>
+                )}
+                {timerState !== 'idle' && (
+                  <Button onClick={resetTimer} variant="outline">Réinitialiser</Button>
                 )}
               </div>
-              <div className="flex justify-center space-x-4 mb-6">
-                {!activeTimer ? (
-                  <>
-                    <Button onClick={() => startTimer('pomodoro')} className="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-full">Pomodoro</Button>
-                    <Button onClick={() => startTimer('deepwork')} className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-full">Deepwork</Button>
-                    <Button onClick={() => startTimer('shortbreak')} className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-full">Short Break</Button>
-                    <Button onClick={() => startTimer('longbreak')} className="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-3 rounded-full">Long Break</Button>
-                  </>
-                ) : (
-                  <>
-                    {isRunning ? (
-                      <Button onClick={pauseTimer} className="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-3 rounded-full">
-                        <Pause className="mr-2 h-5 w-5" /> Pause
-                      </Button>
-                    ) : (
-                      <Button onClick={resumeTimer} className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-full">
-                        <Play className="mr-2 h-5 w-5" /> Resume
-                      </Button>
-                    )}
-                    <Button onClick={stopTimer} className="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-full">Stop</Button>
-                    <Button onClick={resetTimer} className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-full">
-                      <RotateCcw className="mr-2 h-5 w-5" /> Reset
-                    </Button>
-                  </>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="deepWork">
+          <Card>
+            <CardHeader>
+              <CardTitle>Minuterie Deep Work</CardTitle>
+              <CardDescription>Concentrez-vous pendant une longue période sans interruption.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <motion.div
+                className="text-6xl font-bold text-center mb-4"
+                key={timeLeft}
+                initial={{ scale: 1.2 }}
+                animate={{ scale: 1 }}
+                transition={{ duration: 0.3 }}
+              >
+                {formatTime(timeLeft)}
+              </motion.div>
+              <div className="flex justify-center space-x-4 mb-4">
+                {timerState === 'idle' && (
+                  <Button onClick={startTimer}>Démarrer</Button>
+                )}
+                {timerState === 'running' && (
+                  <Button onClick={pauseTimer}>Pause</Button>
+                )}
+                {timerState === 'paused' && (
+                  <Button onClick={resumeTimer}>Reprendre</Button>
+                )}
+                {timerState !== 'idle' && (
+                  <Button onClick={resetTimer} variant="outline">Réinitialiser</Button>
                 )}
               </div>
-              <div className="flex justify-center">
-                <Input
-                  type="text"
-                  placeholder="Enter task name"
-                  value={taskName}
-                  onChange={(e) => setTaskName(e.target.value)}
-                  className="max-w-xs mr-2 rounded-full"
-                />
-                <Button onClick={() => setShowSettings(!showSettings)} className="bg-indigo-500 hover:bg-indigo-600 text-white rounded-full">
-                  <Settings className="mr-2 h-5 w-5" />
-                  {showSettings ? 'Hide' : 'Show'} Settings
-                </Button>
-              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle>Paramètres</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div>
+              <label className="block mb-2">Durée Pomodoro (minutes)</label>
+              <Slider
+                value={[pomoDuration]}
+                onValueChange={(value) => setPomoDuration(value[0])}
+                max={60}
+                step={1}
+              />
             </div>
-
-            <AnimatePresence>
-              {showSettings && (
-                <motion.div
-                  initial={{ opacity: 0, y: -20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  className="bg-white rounded-2xl shadow-xl p-8 mb-8"
-                >
-                  <h2 className="text-2xl mb-6 text-indigo-700">Timer Settings</h2>
-                  <Tabs defaultValue="pomodoro">
-                    <TabsList className="mb-6 grid w-full grid-cols-4 bg-indigo-100 rounded-full p-1">
-                      <TabsTrigger value="pomodoro" className="rounded-full">Pomodoro</TabsTrigger>
-                      <TabsTrigger value="deepwork" className="rounded-full">Deepwork</TabsTrigger>
-                      <TabsTrigger value="shortbreak" className="rounded-full">Short Break</TabsTrigger>
-                      <TabsTrigger value="longbreak" className="rounded-full">Long Break</TabsTrigger>
-                    </TabsList>
-                    {Object.entries(timerSettings).map(([key, value]) => (
-                      <TabsContent key={key} value={key}>
-                        <Slider
-                          value={[value]}
-                          onValueChange={(newValue) => setTimerSettings(prev => ({ ...prev, [key]: newValue[0] }))}
-                          max={key.includes('break') ? 30 : 120}
-                          step={1}
-                          className="mb-4"
-                        />
-                        <p className="text-center text-indigo-600">Duration: {value} minutes</p>
-                      </TabsContent>
-                    ))}
-                  </Tabs>
-                  <div className="flex items-center justify-between mt-6">
-                    <span className="text-indigo-700">Auto-start breaks</span>
-                    <Switch checked={autoStartBreaks} onCheckedChange={setAutoStartBreaks} />
-                  </div>
-                  <div className="flex items-center justify-between mt-4">
-                    <span className="text-indigo-700">Sound notifications</span>
-                    <Switch checked={soundEnabled} onCheckedChange={setSoundEnabled} />
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
-              <h2 className="text-2xl mb-6 text-center text-indigo-700">Quick Stats</h2>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-indigo-50 p-4 rounded-xl">
-                  <h4 className="font-semibold text-indigo-700">Total Pomodoros</h4>
-                  <p className="text-2xl text-indigo-600">{sessions.filter(s => s.type === 'pomodoro').length}</p>
-                </div>
-                <div className="bg-indigo-50 p-4 rounded-xl">
-                  <h4 className="font-semibold text-indigo-700">Total Deepwork</h4>
-                  <p className="text-2xl text-indigo-600">{sessions.filter(s => s.type === 'deepwork').length}</p>
-                </div>
-                <div className="bg-indigo-50 p-4 rounded-xl">
-                  <h4 className="font-semibold text-indigo-700">Productive Time</h4>
-                  <p className="text-2xl text-indigo-600">{formatTime((getTotalDuration('pomodoro') + getTotalDuration('deepwork')) * 60)}</p>
-                </div>
-                <div className="bg-indigo-50 p-4 rounded-xl">
-                  <h4 className="font-semibold text-indigo-700">Break Time</h4>
-                  <p className="text-2xl text-indigo-600">{formatTime((getTotalDuration('shortbreak') + getTotalDuration('longbreak')) * 60)}</p>
-                </div>
-              </div>
+            <div>
+              <label className="block mb-2">Durée Deep Work (minutes)</label>
+              <Slider
+                value={[deepWorkDuration]}
+                onValueChange={(value) => setDeepWorkDuration(value[0])}
+                max={180}
+                step={5}
+              />
             </div>
-
-            <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
-              <h2 className="text-2xl mb-6 text-center text-indigo-700">Analytics</h2>
-              <div className="flex justify-center mb-6">
-                <Tabs value={viewMode} onValueChange={(value: string) => setViewMode(value as 'day' | 'week')}>
-                  <TabsList className="bg-indigo-100 rounded-full p-1">
-                    <TabsTrigger value="day" className="rounded-full">Day</TabsTrigger>
-                    <TabsTrigger value="week" className="rounded-full">Week</TabsTrigger>
-                  </TabsList>
-                </Tabs>
-              </div>
-              <div className="mb-6">
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={(date) => setSelectedDate(date || new Date())}
-                  className="rounded-xl border-indigo-200"
-                  locale={fr}
-                />
-              </div>
-              <div>
-                <h3 className="text-xl mb-4 text-center text-indigo-700">Daily Timeline</h3>
-                <ResponsiveContainer width="100%" height={200}>
-                  <LineChart data={getChartData()}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey={viewMode === 'day' ? 'time' : 'day'} />
-                    <YAxis />
-                    <Tooltip />
-                    {viewMode === 'day' ? (
-                      <Line type="monotone" dataKey="duration" stroke="#6366f1" name="Duration (minutes)" />
-                    ) : (
-                      <>
-                        <Line type="monotone" dataKey="pomodoro" stroke="#EF4444" name="Pomodoro" />
-                        <Line type="monotone" dataKey="deepwork" stroke="#3B82F6" name="Deepwork" />
-                        <Line type="monotone" dataKey="shortbreak" stroke="#10B981" name="Short Break" />
-                        <Line type="monotone" dataKey="longbreak" stroke="#F59E0B" name="Long Break" />
-                      </>
-                    )}
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
+            <div>
+              <label className="block mb-2">Durée pause courte (minutes)</label>
+              <Slider
+                value={[shortBreakDuration]}
+                onValueChange={(value) => setShortBreakDuration(value[0])}
+                max={15}
+                step={1}
+              />
             </div>
-
-            <div className="bg-white rounded-2xl shadow-xl p-8">
-              <h2 className="text-2xl mb-6 text-center text-indigo-700">Time Distribution</h2>
-              <ResponsiveContainer width="100%" height={200}>
-                <PieChart>
-                  <Pie
-                    data={pieChartData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {pieChartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="mt-4 flex flex-wrap justify-center">
-                {pieChartData.map((entry, index) => (
-                  <div key={index} className="flex items-center mr-4 mb-2">
-                    <div className="w-4 h-4 mr-2" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
-                    <span className="text-sm">{entry.name}: {((entry.value / pieChartData.reduce((acc, curr) => acc + curr.value, 0)) * 100).toFixed(1)}%</span>
-                  </div>
-                ))}
-              </div>
+            <div>
+              <label className="block mb-2">Durée pause longue (minutes)</label>
+              <Slider
+                value={[longBreakDuration]}
+                onValueChange={(value) => setLongBreakDuration(value[0])}
+                max={30}
+                step={1}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Pause automatique</span>
+              <Switch
+                checked={autoBreak}
+                onCheckedChange={setAutoBreak}
+              />
+            </div>
+            <div>
+              <label className="block mb-2">Son de notification</label>
+              <Select value={notificationSound} onValueChange={setNotificationSound}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choisir un son" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="notification.mp3">Son par défaut</SelectItem>
+                  <SelectItem value="bell.mp3">Cloche</SelectItem>
+                  <SelectItem value="chime.mp3">Carillon</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+        <CardFooter>
+          <Button onClick={updateUserData}>Sauvegarder les paramètres</Button>
+        </CardFooter>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Statistiques</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="font-semibold">Sessions aujourd'hui</p>
+              <p className="text-2xl">{dailySessions}</p>
+            </div>
+            <div>
+              <p className="font-semibold">Sessions cette semaine</p>
+              <p className="text-2xl">{weeklySessions}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
-
-export default TimerPage
