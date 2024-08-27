@@ -1,14 +1,14 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react'
+import debounce from 'lodash/debounce'
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Cog6ToothIcon, ChartBarIcon } from '@heroicons/react/24/outline'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 type TimerType = 'pomodoro' | 'deepWork'
@@ -29,8 +29,6 @@ export default function TimersPage() {
   const [weeklySessions, setWeeklySessions] = useState({ pomodoro: 0, deepWork: 0 })
   const [totalFocusTime, setTotalFocusTime] = useState({ pomodoro: 0, deepWork: 0 })
   const [longestStreak, setLongestStreak] = useState({ pomodoro: 0, deepWork: 0 })
-  const [showSettings, setShowSettings] = useState(false)
-  const [showAnalytics, setShowAnalytics] = useState(false)
   const [weeklyData, setWeeklyData] = useState<any[]>([])
 
   const user = useUser()
@@ -60,6 +58,10 @@ export default function TimersPage() {
       if (interval) clearInterval(interval)
     }
   }, [timerState])
+
+  useEffect(() => {
+    resetTimer()
+  }, [pomoDuration, deepWorkDuration, timerType])
 
   const fetchUserData = async () => {
     const { data, error } = await supabase
@@ -199,23 +201,34 @@ export default function TimersPage() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
 
+  const debouncedUpdateUserData = useCallback(
+    debounce(() => {
+      updateUserData()
+    }, 500),
+    [updateUserData]
+  )
+
+  useEffect(() => {
+    debouncedUpdateUserData()
+  }, [pomoDuration, deepWorkDuration, pomoShortBreak, pomoLongBreak, deepWorkBreak, autoBreak, soundEnabled, dailySessions, weeklySessions, totalFocusTime, longestStreak, weeklyData])
+
   return (
     <div className="container mx-auto p-4 max-w-4xl">
       <h1 className="text-4xl font-bold mb-8 text-center text-gray-800">Minuteries de Productivité</h1>
 
       <Tabs defaultValue="pomodoro" className="mb-8">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="pomodoro" onClick={() => setTimerType('pomodoro')}>Pomodoro</TabsTrigger>
-          <TabsTrigger value="deepWork" onClick={() => setTimerType('deepWork')}>Deep Work</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-2 mb-4">
+          <TabsTrigger value="pomodoro">Pomodoro</TabsTrigger>
+          <TabsTrigger value="deepWork">Deep Work</TabsTrigger>
         </TabsList>
         <TabsContent value="pomodoro">
-          <Card className="bg-gradient-to-br from-red-50 to-orange-50">
+          <Card>
             <CardHeader>
-              <CardTitle className="text-2xl text-red-800">Minuterie Pomodoro</CardTitle>
+              <CardTitle className="text-2xl">Minuterie Pomodoro</CardTitle>
             </CardHeader>
             <CardContent>
               <motion.div
-                className="text-8xl font-bold text-center mb-8 text-red-600"
+                className="text-8xl font-bold text-center mb-8"
                 key={timeLeft}
                 initial={{ scale: 1.2, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
@@ -225,29 +238,29 @@ export default function TimersPage() {
               </motion.div>
               <div className="flex justify-center space-x-4 mb-4">
                 {timerState === 'idle' && (
-                  <Button onClick={startTimer} size="lg" className="bg-red-600 hover:bg-red-700">Démarrer</Button>
+                  <Button onClick={startTimer} size="lg">Démarrer</Button>
                 )}
                 {timerState === 'running' && (
-                  <Button onClick={pauseTimer} size="lg" className="bg-yellow-600 hover:bg-yellow-700">Pause</Button>
+                  <Button onClick={pauseTimer} size="lg">Pause</Button>
                 )}
                 {timerState === 'paused' && (
-                  <Button onClick={resumeTimer} size="lg" className="bg-green-600 hover:bg-green-700">Reprendre</Button>
+                  <Button onClick={resumeTimer} size="lg">Reprendre</Button>
                 )}
                 {timerState !== 'idle' && (
-                  <Button onClick={resetTimer} variant="outline" size="lg" className="text-red-600 border-red-600 hover:bg-red-50">Réinitialiser</Button>
+                  <Button onClick={resetTimer} variant="outline" size="lg">Réinitialiser</Button>
                 )}
               </div>
             </CardContent>
           </Card>
         </TabsContent>
         <TabsContent value="deepWork">
-          <Card className="bg-gradient-to-br from-blue-50 to-indigo-50">
+          <Card>
             <CardHeader>
-              <CardTitle className="text-2xl text-blue-800">Minuterie Deep Work</CardTitle>
+              <CardTitle className="text-2xl">Minuterie Deep Work</CardTitle>
             </CardHeader>
             <CardContent>
               <motion.div
-                className="text-8xl font-bold text-center mb-8 text-blue-600"
+                className="text-8xl font-bold text-center mb-8"
                 key={timeLeft}
                 initial={{ scale: 1.2, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
@@ -257,16 +270,16 @@ export default function TimersPage() {
               </motion.div>
               <div className="flex justify-center space-x-4 mb-4">
                 {timerState === 'idle' && (
-                  <Button onClick={startTimer} size="lg" className="bg-blue-600 hover:bg-blue-700">Démarrer</Button>
+                  <Button onClick={startTimer} size="lg">Démarrer</Button>
                 )}
                 {timerState === 'running' && (
-                  <Button onClick={pauseTimer} size="lg" className="bg-yellow-600 hover:bg-yellow-700">Pause</Button>
+                  <Button onClick={pauseTimer} size="lg">Pause</Button>
                 )}
                 {timerState === 'paused' && (
-                  <Button onClick={resumeTimer} size="lg" className="bg-green-600 hover:bg-green-700">Reprendre</Button>
+                  <Button onClick={resumeTimer} size="lg">Reprendre</Button>
                 )}
                 {timerState !== 'idle' && (
-                  <Button onClick={resetTimer} variant="outline" size="lg" className="text-blue-600 border-blue-600 hover:bg-blue-50">Réinitialiser</Button>
+                  <Button onClick={resetTimer} variant="outline" size="lg">Réinitialiser</Button>
                 )}
               </div>
             </CardContent>
@@ -274,171 +287,124 @@ export default function TimersPage() {
         </TabsContent>
       </Tabs>
 
-      <Card className="mb-8 bg-gradient-to-br from-purple-50 to-pink-50">
+      <Card className="mb-8">
         <CardHeader>
-          <CardTitle className="text-2xl text-purple-800">Statistiques</CardTitle>
+          <CardTitle className="text-2xl">Paramètres</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="space-y-6">
             <div>
-              <p className="font-semibold text-purple-700">Sessions aujourd'hui</p>
-              <p className="text-2xl text-purple-900">Pomodoro: {dailySessions.pomodoro}</p>
-              <p className="text-2xl text-purple-900">Deep Work: {dailySessions.deepWork}</p>
+              <label className="block mb-2">Durée Pomodoro: {pomoDuration} minutes</label>
+              <Slider
+                value={[pomoDuration]}
+                onValueChange={(value) => setPomoDuration(value[0])}
+                max={60}
+                step={1}
+              />
             </div>
             <div>
-              <p className="font-semibold text-purple-700">Sessions cette semaine</p>
-              <p className="text-2xl text-purple-900">Pomodoro: {weeklySessions.pomodoro}</p>
-              <p className="text-2xl text-purple-900">Deep Work: {weeklySessions.deepWork}</p>
+              <label className="block mb-2">Durée pause courte Pomodoro: {pomoShortBreak} minutes</label>
+              <Slider
+                value={[pomoShortBreak]}
+                onValueChange={(value) => setPomoShortBreak(value[0])}
+                max={15}
+                step={1}
+              />
             </div>
             <div>
-              <p className="font-semibold text-purple-700">Temps total de concentration</p>
-              <p className="text-2xl text-purple-900">Pomodoro: {Math.floor(totalFocusTime.pomodoro / 60)}h</p>
-              <p className="text-2xl text-purple-900">Deep Work: {Math.floor(totalFocusTime.deepWork / 60)}h</p>
+              <label className="block mb-2">Durée pause longue Pomodoro: {pomoLongBreak} minutes</label>
+              <Slider
+                value={[pomoLongBreak]}
+                onValueChange={(value) => setPomoLongBreak(value[0])}
+                max={30}
+                step={1}
+              />
             </div>
             <div>
-              <p className="font-semibold text-purple-700">Plus longue série</p>
-              <p className="text-2xl text-purple-900">Pomodoro: {longestStreak.pomodoro}</p>
-              <p className="text-2xl text-purple-900">Deep Work: {longestStreak.deepWork}</p>
+              <label className="block mb-2">Durée Deep Work: {deepWorkDuration} minutes</label>
+              <Slider
+                value={[deepWorkDuration]}
+                onValueChange={(value) => setDeepWorkDuration(value[0])}
+                max={180}
+                step={5}
+              />
+            </div>
+            <div>
+              <label className="block mb-2">Durée pause Deep Work: {deepWorkBreak} minutes</label>
+              <Slider
+                value={[deepWorkBreak]}
+                onValueChange={(value) => setDeepWorkBreak(value[0])}
+                max={30}
+                step={1}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Pause automatique</span>
+              <Switch
+                checked={autoBreak}
+                onCheckedChange={setAutoBreak}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Son de notification</span>
+              <Switch
+                checked={soundEnabled}
+                onCheckedChange={setSoundEnabled}
+              />
             </div>
           </div>
         </CardContent>
       </Card>
 
-      <div className="flex justify-center space-x-4 mb-8">
-        <Button onClick={() => setShowSettings(!showSettings)} variant="outline" className="bg-gray-100 hover:bg-gray-200">
-          <Cog6ToothIcon className="h-5 w-5 mr-2" />
-          {showSettings ? 'Cacher les paramètres' : 'Afficher les paramètres'}
-        </Button>
-        <Button onClick={() => setShowAnalytics(!showAnalytics)} variant="outline" className="bg-gray-100 hover:bg-gray-200">
-          <ChartBarIcon className="h-5 w-5 mr-2" />
-          {showAnalytics ? 'Cacher les analyses' : 'Afficher les analyses'}
-        </Button>
-      </div>
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle className="text-2xl">Statistiques</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+            <p className="font-semibold">Sessions aujourd'hui</p>
+              <p className="text-2xl">Pomodoro: {dailySessions.pomodoro}</p>
+              <p className="text-2xl">Deep Work: {dailySessions.deepWork}</p>
+            </div>
+            <div>
+              <p className="font-semibold">Sessions cette semaine</p>
+              <p className="text-2xl">Pomodoro: {weeklySessions.pomodoro}</p>
+              <p className="text-2xl">Deep Work: {weeklySessions.deepWork}</p>
+            </div>
+            <div>
+              <p className="font-semibold">Temps total de concentration</p>
+              <p className="text-2xl">Pomodoro: {Math.floor(totalFocusTime.pomodoro / 60)}h</p>
+              <p className="text-2xl">Deep Work: {Math.floor(totalFocusTime.deepWork / 60)}h</p>
+            </div>
+            <div>
+              <p className="font-semibold">Plus longue série</p>
+              <p className="text-2xl">Pomodoro: {longestStreak.pomodoro}</p>
+              <p className="text-2xl">Deep Work: {longestStreak.deepWork}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-      <AnimatePresence>
-        {showSettings && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <Card className="mb-8 bg-gradient-to-br from-green-50 to-teal-50">
-              <CardHeader>
-                <CardTitle className="text-2xl text-green-800">Paramètres</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-6">
-                  <div>
-                    <label className="block mb-2 text-green-700">Durée Pomodoro (minutes)</label>
-                    <Slider
-                      value={[pomoDuration]}
-                      onValueChange={(value) => setPomoDuration(value[0])}
-                      max={60}
-                      step={1}
-                      className="text-green-600"
-                    />
-                  </div>
-                  <div>
-                    <label className="block mb-2 text-green-700">Durée pause courte Pomodoro (minutes)</label>
-                    <Slider
-                      value={[pomoShortBreak]}
-                      onValueChange={(value) => setPomoShortBreak(value[0])}
-                      max={15}
-                      step={1}
-                      className="text-green-600"
-                    />
-                  </div>
-                  <div>
-                    <label className="block mb-2 text-green-700">Durée pause longue Pomodoro (minutes)</label>
-                    <Slider
-                      value={[pomoLongBreak]}
-                      onValueChange={(value) => setPomoLongBreak(value[0])}
-                      max={30}
-                      step={1}
-                      className="text-green-600"
-                    />
-                  </div>
-                  <div>
-                    <label className="block mb-2 text-green-700">Durée Deep Work (minutes)</label>
-                    <Slider
-                      value={[deepWorkDuration]}
-                      onValueChange={(value) => setDeepWorkDuration(value[0])}
-                      max={180}
-                      step={5}
-                      className="text-green-600"
-                    />
-                  </div>
-                  <div>
-                    <label className="block mb-2 text-green-700">Durée pause Deep Work (minutes)</label>
-                    <Slider
-                      value={[deepWorkBreak]}
-                      onValueChange={(value) => setDeepWorkBreak(value[0])}
-                      max={30}
-                      step={1}
-                      className="text-green-600"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-green-700">Pause automatique</span>
-                    <Switch
-                      checked={autoBreak}
-                      onCheckedChange={setAutoBreak}
-                      className="bg-green-600"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-green-700">Son de notification</span>
-                    <Switch
-                      checked={soundEnabled}
-                      onCheckedChange={setSoundEnabled}
-                      className="bg-green-600"
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        )}
-
-        {showAnalytics && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <Card className="mb-8 bg-gradient-to-br from-yellow-50 to-amber-50">
-              <CardHeader>
-                <CardTitle className="text-2xl text-yellow-800">Analyses avancées</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-80 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={weeklyData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="date" />
-                      <YAxis />
-                      <Tooltip />
-                      <Line type="monotone" dataKey="pomodoro" stroke="#ef4444" name="Pomodoro" />
-                      <Line type="monotone" dataKey="deepWork" stroke="#3b82f6" name="Deep Work" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="mt-4">
-                  <p className="text-yellow-800 font-semibold">Productivité hebdomadaire</p>
-                  <p className="text-yellow-700">
-                    Cette semaine, vous avez complété {weeklySessions.pomodoro} sessions Pomodoro et {weeklySessions.deepWork} sessions Deep Work.
-                  </p>
-                  <p className="text-yellow-700 mt-2">
-                    Temps total de concentration : {Math.floor((totalFocusTime.pomodoro + totalFocusTime.deepWork) / 60)} heures
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-2xl">Analyses hebdomadaires</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-80 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={weeklyData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis />
+                <Tooltip />
+                <Line type="monotone" dataKey="pomodoro" stroke="#ef4444" name="Pomodoro" />
+                <Line type="monotone" dataKey="deepWork" stroke="#3b82f6" name="Deep Work" />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
