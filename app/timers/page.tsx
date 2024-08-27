@@ -2,416 +2,397 @@
 
 import { useState, useEffect } from 'react'
 import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { PauseIcon, PlayIcon, StopIcon, CogIcon } from '@heroicons/react/24/solid'
 import { motion, AnimatePresence } from 'framer-motion'
+import { PlayIcon, PauseIcon, StopIcon, CogIcon } from '@heroicons/react/24/solid'
 
 type TimerType = 'pomodoro' | 'deepWork'
-type TimerPhase = 'travail' | 'pauseCourte' | 'pauseLongue'
+type TimerPhase = 'work' | 'shortBreak' | 'longBreak'
 
 interface TimerSettings {
-  dureeTravail: number
-  dureePauseCourte: number
-  dureePauseLongue: number
-  sessionsAvantPauseLongue: number
+  workDuration: number
+  shortBreakDuration: number
+  longBreakDuration: number
+  sessionsBeforeLongBreak: number
 }
 
-interface TimerSession {
-  id: string
-  userId: string
-  type: TimerType
-  duree: number
-  date: string
-}
-
-const parametresParDefaut: Record<TimerType, TimerSettings> = {
+const defaultSettings: Record<TimerType, TimerSettings> = {
   pomodoro: {
-    dureeTravail: 25 * 60,
-    dureePauseCourte: 5 * 60,
-    dureePauseLongue: 15 * 60,
-    sessionsAvantPauseLongue: 4,
+    workDuration: 25 * 60,
+    shortBreakDuration: 5 * 60,
+    longBreakDuration: 15 * 60,
+    sessionsBeforeLongBreak: 4,
   },
   deepWork: {
-    dureeTravail: 90 * 60,
-    dureePauseCourte: 10 * 60,
-    dureePauseLongue: 30 * 60,
-    sessionsAvantPauseLongue: 2,
+    workDuration: 90 * 60,
+    shortBreakDuration: 10 * 60,
+    longBreakDuration: 30 * 60,
+    sessionsBeforeLongBreak: 2,
   },
 }
 
-export default function PageMinuteurs() {
-  const utilisateur = useUser()
+export default function TimersPage() {
+  const user = useUser()
   const supabase = useSupabaseClient()
-  const [minuteurActif, setMinuteurActif] = useState<TimerType | null>(null)
-  const [tempsRestant, setTempsRestant] = useState<Record<TimerType, number>>({
-    pomodoro: parametresParDefaut.pomodoro.dureeTravail,
-    deepWork: parametresParDefaut.deepWork.dureeTravail,
+  const [activeTimer, setActiveTimer] = useState<TimerType | null>(null)
+  const [settings, setSettings] = useState(defaultSettings)
+  const [timeLeft, setTimeLeft] = useState<Record<TimerType, number>>({
+    pomodoro: defaultSettings.pomodoro.workDuration,
+    deepWork: defaultSettings.deepWork.workDuration,
   })
-  const [estEnCours, setEstEnCours] = useState(false)
-  const [phaseActuelle, setPhaseActuelle] = useState<TimerPhase>('travail')
-  const [nombreSessions, setNombreSessions] = useState(0)
-  const [parametres, setParametres] = useState<Record<TimerType, TimerSettings>>(parametresParDefaut)
-  const [afficherParametres, setAfficherParametres] = useState(false)
-  const [donneesAnalytiques, setDonneesAnalytiques] = useState<TimerSession[]>([])
+  const [isRunning, setIsRunning] = useState(false)
+  const [currentPhase, setCurrentPhase] = useState<TimerPhase>('work')
+  const [sessionCount, setSessionCount] = useState(0)
+  const [showSettings, setShowSettings] = useState(false)
 
   useEffect(() => {
-    if (utilisateur) {
-      recupererParametres()
-      recupererAnalytiques()
+    if (user) {
+      fetchSettings()
     }
-  }, [utilisateur])
+  }, [user])
 
   useEffect(() => {
-    let intervalle: NodeJS.Timeout | null = null
-    if (estEnCours && minuteurActif && tempsRestant[minuteurActif] > 0) {
-      intervalle = setInterval(() => {
-        setTempsRestant(prev => ({
+    let interval: NodeJS.Timeout | null = null
+    if (isRunning && activeTimer) {
+      interval = setInterval(() => {
+        setTimeLeft(prev => ({
           ...prev,
-          [minuteurActif]: prev[minuteurActif] - 1
+          [activeTimer]: prev[activeTimer] - 1
         }))
       }, 1000)
-    } else if (minuteurActif && tempsRestant[minuteurActif] === 0 && estEnCours) {
-      gererFinPhase()
     }
     return () => {
-      if (intervalle) clearInterval(intervalle)
+      if (interval) clearInterval(interval)
     }
-  }, [estEnCours, minuteurActif, tempsRestant])
+  }, [isRunning, activeTimer])
 
-  const recupererParametres = async () => {
-    for (const type of ['pomodoro', 'deepWork'] as TimerType[]) {
-      const { data, error } = await supabase
-        .from('parametres_minuteur')
-        .select('*')
-        .eq('user_id', utilisateur?.id)
-        .eq('type', type)
-        .single()
-
-      if (!error && data) {
-        setParametres(prev => ({ ...prev, [type]: data.parametres }))
-        setTempsRestant(prev => ({ ...prev, [type]: data.parametres.dureeTravail }))
-      }
+  useEffect(() => {
+    if (activeTimer && timeLeft[activeTimer] === 0) {
+      handlePhaseComplete()
     }
-  }
+  }, [timeLeft, activeTimer])
 
-  const sauvegarderParametres = async (type: TimerType, nouveauxParametres: TimerSettings) => {
-    const { error } = await supabase
-      .from('parametres_minuteur')
-      .upsert({ user_id: utilisateur?.id, type, parametres: nouveauxParametres })
-
-    if (error) {
-      console.error('Erreur lors de la sauvegarde des paramètres:', error)
-    } else {
-      setParametres(prev => ({ ...prev, [type]: nouveauxParametres }))
-      setTempsRestant(prev => ({ ...prev, [type]: nouveauxParametres.dureeTravail }))
-      if (minuteurActif === type) {
-        setTempsRestant(prev => ({ ...prev, [type]: nouveauxParametres.dureeTravail }))
-      }
-    }
-  }
-
-  const recupererAnalytiques = async () => {
+  const fetchSettings = async () => {
     const { data, error } = await supabase
-      .from('sessions_minuteur')
+      .from('timer_settings')
       .select('*')
-      .eq('user_id', utilisateur?.id)
-      .order('date', { ascending: false })
-      .limit(30)
+      .eq('user_id', user?.id)
 
     if (error) {
-      console.error('Erreur lors de la récupération des analytiques:', error)
+      console.error('Error fetching settings:', error)
+    } else if (data) {
+      const newSettings = { ...defaultSettings }
+      data.forEach(item => {
+        newSettings[item.type as TimerType] = {
+          workDuration: item.work_duration,
+          shortBreakDuration: item.short_break_duration,
+          longBreakDuration: item.long_break_duration,
+          sessionsBeforeLongBreak: item.sessions_before_long_break,
+        }
+      })
+      setSettings(newSettings)
+      setTimeLeft({
+        pomodoro: newSettings.pomodoro.workDuration,
+        deepWork: newSettings.deepWork.workDuration,
+      })
+    }
+  }
+
+  const saveSettings = async (type: TimerType, newSettings: TimerSettings) => {
+    const { error } = await supabase
+      .from('timer_settings')
+      .upsert({
+        user_id: user?.id,
+        type,
+        work_duration: newSettings.workDuration,
+        short_break_duration: newSettings.shortBreakDuration,
+        long_break_duration: newSettings.longBreakDuration,
+        sessions_before_long_break: newSettings.sessionsBeforeLongBreak,
+      })
+
+    if (error) {
+      console.error('Error saving settings:', error)
     } else {
-      setDonneesAnalytiques(data || [])
+      setSettings(prev => ({ ...prev, [type]: newSettings }))
+      setTimeLeft(prev => ({ ...prev, [type]: newSettings.workDuration }))
     }
   }
 
-  const demarrerMinuteur = (type: TimerType) => {
-    setMinuteurActif(type)
-    setPhaseActuelle('travail')
-    setNombreSessions(0)
-    setTempsRestant(prev => ({ ...prev, [type]: parametres[type].dureeTravail }))
-    setEstEnCours(true)
+  const startTimer = (type: TimerType) => {
+    setActiveTimer(type)
+    setCurrentPhase('work')
+    setSessionCount(0)
+    setTimeLeft(prev => ({ ...prev, [type]: settings[type].workDuration }))
+    setIsRunning(true)
   }
 
-  const pauseMinuteur = () => {
-    setEstEnCours(false)
+  const pauseTimer = () => {
+    setIsRunning(false)
   }
 
-  const reprendreMinuteur = () => {
-    setEstEnCours(true)
+  const resumeTimer = () => {
+    setIsRunning(true)
   }
 
-  const arreterMinuteur = () => {
-    setEstEnCours(false)
-    setMinuteurActif(null)
-    setTempsRestant(prev => ({
+  const stopTimer = () => {
+    setIsRunning(false)
+    setActiveTimer(null)
+    setTimeLeft(prev => ({
       ...prev,
-      [minuteurActif as TimerType]: parametres[minuteurActif as TimerType].dureeTravail
+      [activeTimer as TimerType]: settings[activeTimer as TimerType].workDuration
     }))
-    setNombreSessions(0)
+    setSessionCount(0)
   }
 
-  const gererFinPhase = async () => {
-    if (!minuteurActif) return
+  const handlePhaseComplete = () => {
+    if (!activeTimer) return
 
-    const parametresActuels = parametres[minuteurActif]
-    let prochainePhase: TimerPhase = 'travail'
-    let prochaineDuree = parametresActuels.dureeTravail
+    const currentSettings = settings[activeTimer]
+    let nextPhase: TimerPhase = 'work'
+    let nextDuration = currentSettings.workDuration
 
-    if (phaseActuelle === 'travail') {
-      const nouveauNombreSessions = nombreSessions + 1
-      setNombreSessions(nouveauNombreSessions)
+    if (currentPhase === 'work') {
+      const newSessionCount = sessionCount + 1
+      setSessionCount(newSessionCount)
 
-      if (nouveauNombreSessions % parametresActuels.sessionsAvantPauseLongue === 0) {
-        prochainePhase = 'pauseLongue'
-        prochaineDuree = parametresActuels.dureePauseLongue
+      if (newSessionCount % currentSettings.sessionsBeforeLongBreak === 0) {
+        nextPhase = 'longBreak'
+        nextDuration = currentSettings.longBreakDuration
       } else {
-        prochainePhase = 'pauseCourte'
-        prochaineDuree = parametresActuels.dureePauseCourte
-      }
-
-      // Enregistrer la session de travail terminée
-      const { error } = await supabase
-        .from('sessions_minuteur')
-        .insert({
-          user_id: utilisateur?.id,
-          type: minuteurActif,
-          duree: parametresActuels.dureeTravail,
-          date: new Date().toISOString().split('T')[0],
-        })
-
-      if (error) {
-        console.error('Erreur lors de l\'enregistrement de la session:', error)
-      } else {
-        recupererAnalytiques()
+        nextPhase = 'shortBreak'
+        nextDuration = currentSettings.shortBreakDuration
       }
     }
 
-    setPhaseActuelle(prochainePhase)
-    setTempsRestant(prev => ({ ...prev, [minuteurActif]: prochaineDuree }))
+    setCurrentPhase(nextPhase)
+    setTimeLeft(prev => ({ ...prev, [activeTimer]: nextDuration }))
   }
 
-  const formaterTemps = (secondes: number) => {
-    const minutes = Math.floor(secondes / 60)
-    const secondesRestantes = secondes % 60
-    return `${minutes}:${secondesRestantes.toString().padStart(2, '0')}`
+  const formatTime = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60)
+    const remainingSeconds = seconds % 60
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6 bg-gray-50 min-h-screen">
-      <h1 className="text-4xl font-bold mb-8 text-center text-gray-800">Minuteurs</h1>
+    <div className="max-w-4xl mx-auto p-6">
+      <h1 className="text-3xl font-bold mb-8 text-center">Minuteurs</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
         <AnimatePresence>
-          {['pomodoro', 'deepWork'].map((type) => (
-            (!minuteurActif || minuteurActif === type) && (
-              <motion.div
-                key={type}
-                initial={{ opacity: 1, scale: 1 }}
-                animate={{ 
-                  opacity: 1, 
-                  scale: 1, 
-                  gridColumn: minuteurActif === type ? 'span 2' : 'auto',
-                  width: '100%'
-                }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                transition={{ duration: 0.5 }}
-              >
-                <CarteMinuteur
-                  titre={type === 'pomodoro' ? 'Pomodoro' : 'Deep Work'}
-                  minuteurActif={minuteurActif}
-                  typeMinuteur={type as TimerType}
-                  tempsRestant={tempsRestant[type as TimerType]}
-                  estEnCours={estEnCours}
-                  phaseActuelle={phaseActuelle}
-                  demarrerMinuteur={demarrerMinuteur}
-                  pauseMinuteur={pauseMinuteur}
-                  reprendreMinuteur={reprendreMinuteur}
-                  arreterMinuteur={arreterMinuteur}
-                  formaterTemps={formaterTemps}
-                />
-              </motion.div>
-            )
-          ))}
+          {(!activeTimer || activeTimer === 'pomodoro') && (
+            <motion.div
+              key="pomodoro"
+              initial={{ opacity: 1, scale: 1 }}
+              animate={{ 
+                opacity: 1, 
+                scale: 1, 
+                gridColumn: activeTimer === 'pomodoro' ? 'span 2' : 'auto'
+              }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              transition={{ duration: 0.5 }}
+            >
+              <TimerCard
+                title="Pomodoro"
+                type="pomodoro"
+                isActive={activeTimer === 'pomodoro'}
+                timeLeft={timeLeft.pomodoro}
+                isRunning={isRunning}
+                currentPhase={currentPhase}
+                onStart={() => startTimer('pomodoro')}
+                onPause={pauseTimer}
+                onResume={resumeTimer}
+                onStop={stopTimer}
+                formatTime={formatTime}
+              />
+            </motion.div>
+          )}
+          {(!activeTimer || activeTimer === 'deepWork') && (
+            <motion.div
+              key="deepWork"
+              initial={{ opacity: 1, scale: 1 }}
+              animate={{ 
+                opacity: 1, 
+                scale: 1, 
+                gridColumn: activeTimer === 'deepWork' ? 'span 2' : 'auto'
+              }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              transition={{ duration: 0.5 }}
+            >
+              <TimerCard
+                title="Deep Work"
+                type="deepWork"
+                isActive={activeTimer === 'deepWork'}
+                timeLeft={timeLeft.deepWork}
+                isRunning={isRunning}
+                currentPhase={currentPhase}
+                onStart={() => startTimer('deepWork')}
+                onPause={pauseTimer}
+                onResume={resumeTimer}
+                onStop={stopTimer}
+                formatTime={formatTime}
+              />
+            </motion.div>
+          )}
         </AnimatePresence>
       </div>
 
       <button
-        onClick={() => setAfficherParametres(!afficherParametres)}
-        className="mb-8 flex items-center justify-center mx-auto bg-indigo-100 text-indigo-800 px-6 py-3 rounded-full hover:bg-indigo-200 transition duration-300"
+        onClick={() => setShowSettings(!showSettings)}
+        className="mb-8 flex items-center justify-center mx-auto bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300 transition duration-300"
       >
         <CogIcon className="h-5 w-5 mr-2" />
-        {afficherParametres ? 'Masquer les paramètres' : 'Afficher les paramètres'}
+        {showSettings ? 'Masquer les paramètres' : 'Afficher les paramètres'}
       </button>
 
-      {afficherParametres && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
-          {['pomodoro', 'deepWork'].map((type) => (
-            <CarteParametres
-              key={type}
-              titre={type === 'pomodoro' ? 'Paramètres Pomodoro' : 'Paramètres Deep Work'}
-              parametres={parametres[type as TimerType]}
-              sauvegarderParametres={(nouveauxParametres) => sauvegarderParametres(type as TimerType, nouveauxParametres)}
-            />
-          ))}
+      {showSettings && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+          <SettingsCard
+            title="Paramètres Pomodoro"
+            settings={settings.pomodoro}
+            onSave={(newSettings) => saveSettings('pomodoro', newSettings)}
+          />
+          <SettingsCard
+            title="Paramètres Deep Work"
+            settings={settings.deepWork}
+            onSave={(newSettings) => saveSettings('deepWork', newSettings)}
+          />
         </div>
       )}
-
-      <div className="bg-white shadow-lg rounded-xl p-8 mb-8">
-        <h2 className="text-2xl font-semibold mb-6">Données</h2>
-        {donneesAnalytiques.length > 0 ? (
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={donneesAnalytiques}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip />
-              <Line type="monotone" dataKey="duree" stroke="#4F46E5" name="Durée (minutes)" />
-            </LineChart>
-          </ResponsiveContainer>
-        ) : (
-          <p className="text-center text-gray-600">Pas de données à afficher</p>
-        )}
-      </div>
     </div>
   )
 }
 
-const CarteMinuteur = ({
-  titre,
-  minuteurActif,
-  typeMinuteur,
-  tempsRestant,
-  estEnCours,
-  phaseActuelle,
-  demarrerMinuteur,
-  pauseMinuteur,
-  reprendreMinuteur,
-  arreterMinuteur,
-  formaterTemps,
+const TimerCard = ({
+  title,
+  type,
+  isActive,
+  timeLeft,
+  isRunning,
+  currentPhase,
+  onStart,
+  onPause,
+  onResume,
+  onStop,
+  formatTime,
 }: {
-  titre: string
-  minuteurActif: TimerType | null
-  typeMinuteur: TimerType
-  tempsRestant: number
-  estEnCours: boolean
-  phaseActuelle: TimerPhase
-  demarrerMinuteur: (type: TimerType) => void
-  pauseMinuteur: () => void
-  reprendreMinuteur: () => void
-  arreterMinuteur: () => void
-  formaterTemps: (secondes: number) => string
+  title: string
+  type: TimerType
+  isActive: boolean
+  timeLeft: number
+  isRunning: boolean
+  currentPhase: TimerPhase
+  onStart: () => void
+  onPause: () => void
+  onResume: () => void
+  onStop: () => void
+  formatTime: (seconds: number) => string
 }) => (
-  <div className="bg-white shadow-lg rounded-xl p-8">
-    <h2 className="text-2xl font-semibold mb-6">{titre}</h2>
+  <div className="bg-white shadow-md rounded-lg p-6">
+    <h2 className="text-xl font-semibold mb-4">{title}</h2>
     <div className="text-center">
-      <p className="text-6xl font-bold mb-6 text-indigo-600">{formaterTemps(tempsRestant)}</p>
-      <p className="text-lg mb-6 text-gray-600">
-        {minuteurActif === typeMinuteur
-          ? `Phase actuelle : ${phaseActuelle === 'travail' ? 'Travail' : phaseActuelle === 'pauseCourte' ? 'Pause courte' : 'Pause longue'}`
+      <p className="text-4xl font-bold mb-4">{formatTime(timeLeft)}</p>
+      <p className="text-lg mb-4">
+        {isActive
+          ? `Phase actuelle : ${currentPhase === 'work' ? 'Travail' : currentPhase === 'shortBreak' ? 'Pause courte' : 'Pause longue'}`
           : 'Minuteur inactif'}
       </p>
-      {minuteurActif === typeMinuteur ? (
-        <div className="flex justify-center space-x-4">
-          {estEnCours ? (
+      {isActive ? (
+        <div className="flex justify-center space-x-2">
+          {isRunning ? (
             <button
-              onClick={pauseMinuteur}
-              className="bg-yellow-500 text-white px-6 py-3 rounded-full hover:bg-yellow-600 transition duration-300"
+              onClick={onPause}
+              className="bg-yellow-500 text-white px-4 py-2 rounded-md hover:bg-yellow-600 transition duration-300"
             >
-              <PauseIcon className="h-6 w-6" />
+              <PauseIcon className="h-5 w-5" />
             </button>
           ) : (
             <button
-              onClick={reprendreMinuteur}
-              className="bg-green-500 text-white px-6 py-3 rounded-full hover:bg-green-600 transition duration-300"
+              onClick={onResume}
+              className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition duration-300"
             >
-              <PlayIcon className="h-6 w-6" />
+              <PlayIcon className="h-5 w-5" />
             </button>
           )}
           <button
-            onClick={arreterMinuteur}
-            className="bg-red-500 text-white px-6 py-3 rounded-full hover:bg-red-600 transition duration-300"
+            onClick={onStop}
+            className="bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600 transition duration-300"
           >
-            <StopIcon className="h-6 w-6" />
+            <StopIcon className="h-5 w-5" />
           </button>
         </div>
       ) : (
         <button
-          onClick={() => demarrerMinuteur(typeMinuteur)}
-          className="bg-indigo-600 text-white px-8 py-3 rounded-full hover:bg-indigo-700 transition duration-300 text-lg"
-          >
-            Démarrer
-          </button>
-        )}
-      </div>
+          onClick={onStart}
+          className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition duration-300"
+        >
+          Démarrer
+        </button>
+      )}
     </div>
-  )
-  
-  const CarteParametres = ({
-    titre,
-    parametres,
-    sauvegarderParametres,
+  </div>
+)
+
+const SettingsCard = ({
+    title,
+    settings,
+    onSave,
   }: {
-    titre: string
-    parametres: TimerSettings
-    sauvegarderParametres: (parametres: TimerSettings) => void
+    title: string
+    settings: TimerSettings
+    onSave: (settings: TimerSettings) => void
   }) => {
-    const [parametresLocaux, setParametresLocaux] = useState(parametres)
+    const [localSettings, setLocalSettings] = useState(settings)
   
-    useEffect(() => {
-      setParametresLocaux(parametres)
-    }, [parametres])
-  
-    const gererChangement = (cle: keyof TimerSettings, valeur: number) => {
-      setParametresLocaux(prev => ({ ...prev, [cle]: valeur * 60 })) // Convertir les minutes en secondes
+    const handleChange = (key: keyof TimerSettings, value: number) => {
+      setLocalSettings({ ...localSettings, [key]: value * 60 }) // Convert minutes to seconds
     }
   
-    const gererSauvegarde = () => {
-      sauvegarderParametres(parametresLocaux)
+    const handleSave = () => {
+      onSave(localSettings)
     }
   
     return (
-      <div className="bg-white shadow-lg rounded-xl p-8">
-        <h2 className="text-2xl font-semibold mb-6">{titre}</h2>
-        <div className="space-y-6">
+      <div className="bg-white shadow-md rounded-lg p-6">
+        <h2 className="text-xl font-semibold mb-4">{title}</h2>
+        <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Durée de travail (minutes)</label>
+            <label className="block text-sm font-medium text-gray-700">Durée de travail (minutes)</label>
             <input
               type="number"
-              value={parametresLocaux.dureeTravail / 60}
-              onChange={(e) => gererChangement('dureeTravail', parseInt(e.target.value))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              value={localSettings.workDuration / 60}
+              onChange={(e) => handleChange('workDuration', parseInt(e.target.value))}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Durée de pause courte (minutes)</label>
+            <label className="block text-sm font-medium text-gray-700">Durée de pause courte (minutes)</label>
             <input
               type="number"
-              value={parametresLocaux.dureePauseCourte / 60}
-              onChange={(e) => gererChangement('dureePauseCourte', parseInt(e.target.value))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              value={localSettings.shortBreakDuration / 60}
+              onChange={(e) => handleChange('shortBreakDuration', parseInt(e.target.value))}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Durée de pause longue (minutes)</label>
+            <label className="block text-sm font-medium text-gray-700">Durée de pause longue (minutes)</label>
             <input
               type="number"
-              value={parametresLocaux.dureePauseLongue / 60}
-              onChange={(e) => gererChangement('dureePauseLongue', parseInt(e.target.value))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              value={localSettings.longBreakDuration / 60}
+              onChange={(e) => handleChange('longBreakDuration', parseInt(e.target.value))}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Sessions avant pause longue</label>
+            <label className="block text-sm font-medium text-gray-700">Sessions avant pause longue</label>
             <input
               type="number"
-              value={parametresLocaux.sessionsAvantPauseLongue}
-              onChange={(e) => gererChangement('sessionsAvantPauseLongue', parseInt(e.target.value))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              value={localSettings.sessionsBeforeLongBreak}
+              onChange={(e) => handleChange('sessionsBeforeLongBreak', parseInt(e.target.value))}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
             />
           </div>
           <button
-            onClick={gererSauvegarde}
+            onClick={handleSave}
             className="w-full bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition duration-300"
           >
             Enregistrer les paramètres
