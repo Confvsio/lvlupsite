@@ -214,7 +214,54 @@ export default function TimersPage() {
     setTimerStates(prev => ({ ...prev, [timerType]: 'running' }))
   }
 
-  const resetTimer = (timerType: TimerType) => {
+  const stopTimer = (timerType: TimerType) => {
+    const elapsedTime = (timerType === 'pomodoro' ? pomoDuration : deepWorkDuration) * 60 - timesLeft[timerType]
+    const elapsedMinutes = Math.floor(elapsedTime / 60)
+    
+    if (elapsedMinutes > 0) {
+      setDailySessions(prev => ({
+        ...prev,
+        [timerType]: prev[timerType] + 1
+      }))
+      setWeeklySessions(prev => ({
+        ...prev,
+        [timerType]: prev[timerType] + 1
+      }))
+      setTotalFocusTime(prev => ({
+        ...prev,
+        [timerType]: prev[timerType] + elapsedMinutes
+      }))
+      setLongestStreak(prev => ({
+        ...prev,
+        [timerType]: Math.max(prev[timerType], dailySessions[timerType] + 1)
+      }))
+
+      const today = new Date().toISOString().split('T')[0]
+      setWeeklyData(prev => {
+        const updatedData = [...prev]
+        const todayIndex = updatedData.findIndex(d => d.date === today)
+        if (todayIndex !== -1) {
+          updatedData[todayIndex] = {
+            ...updatedData[todayIndex],
+            [timerType]: (updatedData[todayIndex][timerType] || 0) + 1,
+            productivity: calculateProductivity({
+              ...updatedData[todayIndex],
+              [timerType]: (updatedData[todayIndex][timerType] || 0) + 1
+            })
+          }
+        } else {
+          updatedData.push({ 
+            date: today, 
+            [timerType]: 1,
+            productivity: calculateProductivity({ [timerType]: 1 })
+          })
+        }
+        return updatedData
+      })
+
+      debouncedUpdateUserData()
+    }
+
     setTimerStates(prev => ({ ...prev, [timerType]: 'idle' }))
     setTimesLeft(prev => ({
       ...prev,
@@ -269,7 +316,7 @@ export default function TimersPage() {
                   <Button onClick={() => resumeTimer(type as TimerType)} size="lg" className="w-32">Reprendre</Button>
                 )}
                 {timerStates[type as TimerType] !== 'idle' && (
-                  <Button onClick={() => resetTimer(type as TimerType)} variant="outline" size="lg" className="w-32">Réinitialiser</Button>
+                  <Button onClick={() => stopTimer(type as TimerType)} variant="outline" size="lg" className="w-32">Arrêter</Button>
                 )}
               </div>
             </CardContent>
@@ -283,7 +330,7 @@ export default function TimersPage() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            <StatCard
+          <StatCard
               icon={<ClockIcon className="h-8 w-8 text-blue-500" />}
               title="Sessions aujourd'hui"
               pomodoro={dailySessions.pomodoro}
