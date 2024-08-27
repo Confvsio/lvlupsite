@@ -1,7 +1,4 @@
-// app/timers/page.tsx
-'use client'
-
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Slider } from "@/components/ui/slider"
@@ -9,10 +6,10 @@ import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
 import { useSupabaseClient } from '@supabase/auth-helpers-react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts'
 import { Calendar } from "@/components/ui/calendar"
-import { format, startOfDay, endOfDay } from 'date-fns'
-import { Bell, Settings } from 'lucide-react'
+import { format, startOfWeek, endOfWeek } from 'date-fns'
+import { Settings } from 'lucide-react'
 
 interface SessionData {
   id: string;
@@ -25,7 +22,7 @@ interface SessionData {
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 
-const TimerPage = () => {
+const TimerPage: React.FC = () => {
   const [pomodoroTime, setPomodoroTime] = useState(25)
   const [deepWorkTime, setDeepWorkTime] = useState(60)
   const [shortBreakTime, setShortBreakTime] = useState(5)
@@ -38,6 +35,7 @@ const TimerPage = () => {
   const [analyticsData, setAnalyticsData] = useState<SessionData[]>([])
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const [showSettings, setShowSettings] = useState(false)
+  const [viewMode, setViewMode] = useState<'day' | 'week'>('day')
   const supabase = useSupabaseClient()
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
@@ -59,7 +57,7 @@ const TimerPage = () => {
 
   useEffect(() => {
     fetchAnalytics()
-  }, [selectedDate])
+  }, [selectedDate, viewMode])
 
   const startTimer = async (type: 'pomodoro' | 'deepwork' | 'shortbreak' | 'longbreak') => {
     setActiveTimer(type)
@@ -67,7 +65,7 @@ const TimerPage = () => {
     const { data, error } = await supabase.from('sessions').insert({
       type: type,
       start_time: new Date().toISOString(),
-      duration: 0,  // Initialize duration as 0
+      duration: 0,
       task_name: taskName
     }).select()
     if (error) console.error('Error starting timer:', error)
@@ -79,7 +77,7 @@ const TimerPage = () => {
       const actualDuration = (getTimerDuration(activeTimer) - timeLeft) / 60
       const { error } = await supabase.from('sessions').update({
         end_time: new Date().toISOString(),
-        duration: actualDuration  // Update with actual duration
+        duration: actualDuration
       }).eq('start_time', new Date(Date.now() - getTimerDuration(activeTimer) * 1000).toISOString())
       if (error) console.error('Error stopping timer:', error)
       else fetchAnalytics()
@@ -87,7 +85,6 @@ const TimerPage = () => {
     setActiveTimer(null)
     setTimeLeft(0)
   }
-
 
   const handleTimerComplete = () => {
     if (soundEnabled && audioRef.current) {
@@ -111,8 +108,16 @@ const TimerPage = () => {
   }
 
   const fetchAnalytics = async () => {
-    const start = startOfDay(selectedDate)
-    const end = endOfDay(selectedDate)
+    let start, end;
+    if (viewMode === 'day') {
+      start = new Date(selectedDate)
+      start.setHours(0, 0, 0, 0)
+      end = new Date(selectedDate)
+      end.setHours(23, 59, 59, 999)
+    } else {
+      start = startOfWeek(selectedDate)
+      end = endOfWeek(selectedDate)
+    }
 
     const { data, error } = await supabase
       .from('sessions')
@@ -140,13 +145,36 @@ const TimerPage = () => {
     { name: 'Deep Work', value: getTotalDuration('deepwork') },
     { name: 'Short Break', value: getTotalDuration('shortbreak') },
     { name: 'Long Break', value: getTotalDuration('longbreak') },
-  ]
+  ].filter(item => item.value > 0)
 
   const formatTime = (minutes: number) => {
     const hours = Math.floor(minutes / 60)
-    const mins = minutes % 60
+    const mins = Math.round(minutes % 60)
     return `${hours}h ${mins}m`
   }
+
+  const weeklyData = [
+    { name: 'Mon', pomodoro: 0, deepwork: 0 },
+    { name: 'Tue', pomodoro: 0, deepwork: 0 },
+    { name: 'Wed', pomodoro: 0, deepwork: 0 },
+    { name: 'Thu', pomodoro: 0, deepwork: 0 },
+    { name: 'Fri', pomodoro: 0, deepwork: 0 },
+    { name: 'Sat', pomodoro: 0, deepwork: 0 },
+    { name: 'Sun', pomodoro: 0, deepwork: 0 },
+  ]
+
+  analyticsData.forEach(session => {
+    const day = new Date(session.start_time).getDay()
+    const dayName = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day]
+    const dayData = weeklyData.find(d => d.name === dayName)
+    if (dayData) {
+      if (session.type === 'pomodoro') {
+        dayData.pomodoro += session.duration
+      } else if (session.type === 'deepwork') {
+        dayData.deepwork += session.duration
+      }
+    }
+  })
 
   return (
     <div className="container mx-auto p-4 min-h-screen bg-gray-100">
@@ -191,7 +219,7 @@ const TimerPage = () => {
           {showSettings ? 'Hide' : 'Show'} Settings
         </Button>
       </div>
-  
+
       <AnimatePresence>
         {showSettings && (
           <motion.div
@@ -240,11 +268,15 @@ const TimerPage = () => {
           </motion.div>
         )}
       </AnimatePresence>
-  
+
       <div className="bg-white p-6 rounded-lg shadow-lg mb-8">
         <h2 className="text-2xl mb-4 text-center">Analytics</h2>
-        <div className="flex flex-col lg:flex-row gap-8">
-          <div className="flex-1">
+        <div className="flex justify-center mb-4">
+          <Button onClick={() => setViewMode('day')} className={viewMode === 'day' ? 'bg-blue-500' : ''}>Day</Button>
+          <Button onClick={() => setViewMode('week')} className={viewMode === 'week' ? 'bg-blue-500' : ''}>Week</Button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div>
             <Calendar
               mode="single"
               selected={selectedDate}
@@ -273,7 +305,7 @@ const TimerPage = () => {
               </div>
             </div>
           </div>
-          <div className="flex-1">
+          <div>
             <h3 className="text-xl mb-2 text-center">Time Distribution</h3>
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
@@ -285,7 +317,7 @@ const TimerPage = () => {
                   outerRadius={80}
                   fill="#8884d8"
                   dataKey="value"
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  label={({ name, percent }) => percent > 0 ? `${name} ${(percent * 100).toFixed(0)}%` : ''}
                 >
                   {pieChartData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -296,23 +328,39 @@ const TimerPage = () => {
               </PieChart>
             </ResponsiveContainer>
           </div>
-        </div>
-        <div className="mt-8">
-          <h3 className="text-xl mb-2 text-center">Session Timeline</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={analyticsData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="start_time" tickFormatter={(time) => format(new Date(time), 'HH:mm')} />
-              <YAxis />
-              <Tooltip labelFormatter={(label) => format(new Date(label), 'HH:mm')} />
-              <Legend />
-              <Line type="monotone" dataKey="duration" stroke="#8884d8" name="Duration (minutes)" />
-            </LineChart>
-          </ResponsiveContainer>
+          <div>
+            <h3 className="text-xl mb-2 text-center">
+              {viewMode === 'day' ? 'Daily Timeline' : 'Weekly Overview'}
+            </h3>
+            {viewMode === 'day' ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={analyticsData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="start_time" tickFormatter={(time) => format(new Date(time), 'HH:mm')} />
+                  <YAxis />
+                  <Tooltip labelFormatter={(label) => format(new Date(label), 'HH:mm')} />
+                  <Legend />
+                  <Line type="monotone" dataKey="duration" stroke="#8884d8" name="Duration (minutes)" />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={weeklyData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="pomodoro" fill="#8884d8" name="Pomodoro" />
+                  <Bar dataKey="deepwork" fill="#82ca9d" name="Deep Work" />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
         </div>
         <div className="mt-8">
           <h3 className="text-xl mb-2 text-center">Session Summary</h3>
-          <ul className="space-y-2">
+          <ul className="space-y-2 max-h-60 overflow-y-auto">
             {analyticsData.map((session, index) => (
               <li key={index} className="bg-gray-100 p-2 rounded flex justify-between items-center">
                 <span>
@@ -331,5 +379,5 @@ const TimerPage = () => {
     </div>
   )
 }
-            
+
 export default TimerPage
