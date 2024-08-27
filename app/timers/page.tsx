@@ -11,16 +11,17 @@ import { Input } from "@/components/ui/input"
 import { useSupabaseClient } from '@supabase/auth-helpers-react'
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
 import { Calendar } from "@/components/ui/calendar"
-import { format } from 'date-fns'
+import { format, startOfWeek, endOfWeek } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { Settings } from 'lucide-react'
 
-interface TimerSession {
+interface SessionData {
   id: string;
-  type: 'pomodoro' | 'deepwork' | 'shortbreak' | 'longbreak';
-  startTime: Date;
+  start_time: string;
+  end_time?: string;
+  type: string;
   duration: number;
-  taskName?: string;
+  task_name?: string;
 }
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
@@ -30,14 +31,15 @@ const TimerPage: React.FC = () => {
   const [deepWorkTime, setDeepWorkTime] = useState(60)
   const [shortBreakTime, setShortBreakTime] = useState(5)
   const [longBreakTime, setLongBreakTime] = useState(15)
-  const [activeTimer, setActiveTimer] = useState<TimerSession | null>(null)
+  const [activeTimer, setActiveTimer] = useState<SessionData | null>(null)
   const [timeLeft, setTimeLeft] = useState(0)
   const [autoStartBreaks, setAutoStartBreaks] = useState(false)
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [taskName, setTaskName] = useState('')
-  const [sessions, setSessions] = useState<TimerSession[]>([])
+  const [sessions, setSessions] = useState<SessionData[]>([])
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const [showSettings, setShowSettings] = useState(false)
+  const [viewMode, setViewMode] = useState<'day' | 'week'>('day')
   const supabase = useSupabaseClient()
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -48,17 +50,12 @@ const TimerPage: React.FC = () => {
   }, [])
 
   useEffect(() => {
-    if (activeTimer) {
+    if (activeTimer && timeLeft > 0) {
       intervalRef.current = setInterval(() => {
-        setTimeLeft(prev => {
-          if (prev <= 1) {
-            clearInterval(intervalRef.current!)
-            handleTimerComplete()
-            return 0
-          }
-          return prev - 1
-        })
+        setTimeLeft(prev => prev - 1)
       }, 1000)
+    } else if (activeTimer && timeLeft === 0) {
+      handleTimerComplete()
     }
 
     return () => {
@@ -66,40 +63,42 @@ const TimerPage: React.FC = () => {
         clearInterval(intervalRef.current)
       }
     }
-  }, [activeTimer])
+  }, [activeTimer, timeLeft])
 
   useEffect(() => {
     fetchSessions()
-  }, [selectedDate])
+  }, [selectedDate, viewMode])
 
   const startTimer = async (type: 'pomodoro' | 'deepwork' | 'shortbreak' | 'longbreak') => {
     const duration = getTimerDuration(type)
-    const newSession: TimerSession = {
+    const newSession: SessionData = {
       id: Date.now().toString(),
       type,
-      startTime: new Date(),
+      start_time: new Date().toISOString(),
       duration: 0,
-      taskName
+      task_name: taskName
     }
     setActiveTimer(newSession)
     setTimeLeft(duration)
     const { error } = await supabase.from('sessions').insert(newSession)
-    if (error) console.error('Error starting timer:', error)
+    if (error) console.error('Erreur lors du démarrage du minuteur:', error)
   }
 
   const stopTimer = async () => {
     if (activeTimer) {
       const endTime = new Date()
-      const actualDuration = (endTime.getTime() - activeTimer.startTime.getTime()) / 60000
+      const actualDuration = (endTime.getTime() - new Date(activeTimer.start_time).getTime()) / 60000 // Convert to minutes
       const { error } = await supabase.from('sessions').update({
+        end_time: endTime.toISOString(),
         duration: actualDuration
       }).eq('id', activeTimer.id)
-      if (error) console.error('Error stopping timer:', error)
-      else {
-        setActiveTimer(null)
-        setTimeLeft(0)
-        fetchSessions()
-      }
+      if (error) console.error('Erreur lors de l\'arrêt du minuteur:', error)
+      else fetchSessions()
+    }
+    setActiveTimer(null)
+    setTimeLeft(0)
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current)
     }
   }
 
@@ -132,16 +131,16 @@ const TimerPage: React.FC = () => {
     const { data, error } = await supabase
       .from('sessions')
       .select('*')
-      .gte('startTime', startOfDay.toISOString())
-      .lte('startTime', endOfDay.toISOString())
-      .order('startTime', { ascending: true })
+      .gte('start_time', startOfDay.toISOString())
+      .lte('start_time', endOfDay.toISOString())
+      .order('start_time', { ascending: true })
 
     if (error) {
-      console.error('Error fetching sessions:', error)
+      console.error('Erreur lors de la récupération des sessions:', error)
       return
     }
 
-    setSessions(data as TimerSession[])
+    setSessions(data as SessionData[])
   }
 
   const getTotalDuration = (type: string) => {
@@ -261,48 +260,38 @@ const TimerPage: React.FC = () => {
       <div className="bg-white p-6 rounded-lg shadow-lg mb-8">
         <h2 className="text-2xl mb-4 text-center">Analyses</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div>
+  <h3 className="text-xl mb-2 text-center">Distribution du Temps</h3>
+  <ResponsiveContainer width="100%" height={200}>
+    <PieChart>
+      <Pie
+        data={pieChartData}
+        cx="50%"
+        cy="50%"
+        innerRadius={60}
+        outerRadius={80}
+        fill="#8884d8"
+        dataKey="value"
+      >
+        {pieChartData.map((entry, index) => (
+          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+        ))}
+      </Pie>
+    </PieChart>
+  </ResponsiveContainer>
+  <div className="mt-4 flex flex-wrap justify-center">
+    {pieChartData.map((entry, index) => (
+      <div key={index} className="flex items-center mr-4 mb-2">
+        <div className="w-4 h-4 mr-2" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
+        <span>{entry.name}: {((entry.value / pieChartData.reduce((acc, curr) => acc + curr.value, 0)) * 100).toFixed(1)}%</span>
+      </div>
+    ))}
+  </div>
+</div>
+
           <div>
-            <h3 className="text-xl mb-2 text-center">Distribution du Temps</h3>
-            <div className="flex items-center justify-center">
-              <ResponsiveContainer width={200} height={200}>
-                <PieChart>
-                  <Pie
-                    data={pieChartData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {pieChartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="ml-4">
-                {pieChartData.map((entry, index) => (
-                  <div key={index} className="flex items-center mb-2">
-                    <div className="w-4 h-4 mr-2" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
-                    <span>{entry.name}: {((entry.value / pieChartData.reduce((acc, curr) => acc + curr.value, 0)) * 100).toFixed(1)}%</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-          <div className="flex flex-col items-center justify-center">
-            <Calendar
-              mode="single"
-              selected={selectedDate}
-              onSelect={(date) => setSelectedDate(date || new Date())}
-              className="rounded-md border shadow-md"
-              locale={fr}
-            />
-          </div>
-          <div className="md:col-span-2">
             <h3 className="text-xl mb-2 text-center">Statistiques Rapides</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg">
+            <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
               <div className="bg-white p-3 rounded shadow">
                 <h4 className="font-semibold text-sm">Total Pomodoros</h4>
                 <p className="text-lg">{sessions.filter(s => s.type === 'pomodoro').length}</p>
