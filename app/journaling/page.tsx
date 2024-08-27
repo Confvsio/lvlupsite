@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { useForm, SubmitHandler } from 'react-hook-form'
-import { PlusIcon, CalendarIcon, BookOpenIcon, TagIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
+import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react'
+import { PlusIcon, CalendarIcon, BookOpenIcon, TagIcon, MagnifyingGlassIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline'
+import LoadingSpinner from '@/components/LoadingSpinner'
 
 type Entry = {
   id: string
@@ -23,27 +25,68 @@ export default function JournalingPage() {
   const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null)
   const [activeTab, setActiveTab] = useState<'all' | 'calendar' | 'tags'>('all')
   const [searchTerm, setSearchTerm] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
   const { register, handleSubmit, formState: { errors }, reset } = useForm<Inputs>()
+  const user = useUser()
+  const supabase = useSupabaseClient()
 
   useEffect(() => {
-    // Fetch entries from API or local storage
-    const fetchedEntries = [
-      { id: '1', title: 'Mon premier jour', content: 'Aujourd\'hui était une journée productive...', date: '2023-05-01', tags: ['travail', 'productivité'] },
-      { id: '2', title: 'Réflexions sur la gratitude', content: 'Je suis reconnaissant pour...', date: '2023-05-02', tags: ['gratitude', 'réflexion'] },
-    ]
-    setEntries(fetchedEntries)
-  }, [])
+    if (user) {
+      fetchEntries()
+    }
+  }, [user])
 
-  const onSubmit: SubmitHandler<Inputs> = (data) => {
-    const newEntry: Entry = {
-      id: Date.now().toString(),
+  async function fetchEntries() {
+    const { data, error } = await supabase
+      .from('journal_entries')
+      .select('*')
+      .order('date', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching entries:', error)
+    } else {
+      setEntries(data || [])
+    }
+    setIsLoading(false)
+  }
+
+  const onSubmit: SubmitHandler<Inputs> = async (data) => {
+    if (!user) return
+
+    const newEntry = {
+      user_id: user.id,
       title: data.title,
       content: data.content,
+      tags: data.tags.split(',').map(tag => tag.trim()),
       date: new Date().toISOString().split('T')[0],
-      tags: data.tags.split(',').map(tag => tag.trim())
     }
-    setEntries([newEntry, ...entries])
-    reset()
+
+    const { data: insertedData, error } = await supabase
+      .from('journal_entries')
+      .insert([newEntry])
+      .select()
+
+    if (error) {
+      console.error('Error adding entry:', error)
+    } else if (insertedData) {
+      setEntries([insertedData[0], ...entries])
+      reset()
+      setSelectedEntry(null)
+    }
+  }
+
+  async function deleteEntry(id: string) {
+    const { error } = await supabase
+      .from('journal_entries')
+      .delete()
+      .eq('id', id)
+
+    if (error) {
+      console.error('Error deleting entry:', error)
+    } else {
+      setEntries(entries.filter(entry => entry.id !== id))
+      setSelectedEntry(null)
+    }
   }
 
   const filteredEntries = entries.filter(entry =>
@@ -52,21 +95,23 @@ export default function JournalingPage() {
     entry.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
   )
 
+  if (isLoading) {
+    return <LoadingSpinner />
+  }
+
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex h-screen bg-gray-100 p-4">
       {/* Sidebar */}
-      <div className="w-64 bg-white shadow-md">
-        <div className="p-4">
-          <h1 className="text-2xl font-bold mb-4">Mon Journal</h1>
-          <button
-            onClick={() => setSelectedEntry(null)}
-            className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
-          >
-            <PlusIcon className="h-5 w-5 mr-2" />
-            Nouvelle entrée
-          </button>
-        </div>
-        <div className="flex border-b">
+      <div className="w-64 bg-white shadow-md rounded-lg mr-4 p-4">
+        <h1 className="text-2xl font-bold mb-4 text-indigo-600">Mon Journal</h1>
+        <button
+          onClick={() => setSelectedEntry(null)}
+          className="w-full flex items-center justify-center px-4 py-2 mb-4 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition duration-300"
+        >
+          <PlusIcon className="h-5 w-5 mr-2" />
+          Nouvelle entrée
+        </button>
+        <div className="flex mb-4">
           <button
             onClick={() => setActiveTab('all')}
             className={`flex-1 py-2 text-sm font-medium ${activeTab === 'all' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500'}`}
@@ -89,26 +134,24 @@ export default function JournalingPage() {
             Tags
           </button>
         </div>
-        <div className="p-4">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Rechercher..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border rounded-md"
-            />
-            <MagnifyingGlassIcon className="h-5 w-5 text-gray-400 absolute left-3 top-3" />
-          </div>
+        <div className="relative mb-4">
+          <input
+            type="text"
+            placeholder="Rechercher..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          />
+          <MagnifyingGlassIcon className="h-5 w-5 text-gray-400 absolute left-3 top-3" />
         </div>
         <div className="overflow-y-auto h-full">
           {filteredEntries.map(entry => (
             <div
               key={entry.id}
               onClick={() => setSelectedEntry(entry)}
-              className="p-4 hover:bg-gray-100 cursor-pointer"
+              className="p-3 hover:bg-gray-100 cursor-pointer rounded-md transition duration-300"
             >
-              <h3 className="font-medium">{entry.title}</h3>
+              <h3 className="font-medium text-gray-800">{entry.title}</h3>
               <p className="text-sm text-gray-500">{entry.date}</p>
             </div>
           ))}
@@ -116,15 +159,25 @@ export default function JournalingPage() {
       </div>
 
       {/* Main content */}
-      <div className="flex-1 p-8 overflow-y-auto">
+      <div className="flex-1 bg-white shadow-md rounded-lg p-6 overflow-y-auto">
         {selectedEntry ? (
           <div>
-            <h2 className="text-2xl font-bold mb-4">{selectedEntry.title}</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold text-gray-800">{selectedEntry.title}</h2>
+              <div className="flex space-x-2">
+                <button onClick={() => setSelectedEntry(null)} className="text-indigo-600 hover:text-indigo-800">
+                  <PencilIcon className="h-5 w-5" />
+                </button>
+                <button onClick={() => deleteEntry(selectedEntry.id)} className="text-red-600 hover:text-red-800">
+                  <TrashIcon className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
             <p className="text-gray-600 mb-4">{selectedEntry.date}</p>
-            <p className="whitespace-pre-wrap">{selectedEntry.content}</p>
+            <p className="whitespace-pre-wrap text-gray-700">{selectedEntry.content}</p>
             <div className="mt-4">
               {selectedEntry.tags.map(tag => (
-                <span key={tag} className="inline-block bg-gray-200 rounded-full px-3 py-1 text-sm font-semibold text-gray-700 mr-2 mb-2">
+                <span key={tag} className="inline-block bg-indigo-100 text-indigo-800 rounded-full px-3 py-1 text-sm font-semibold mr-2 mb-2">
                   {tag}
                 </span>
               ))}
@@ -133,40 +186,40 @@ export default function JournalingPage() {
         ) : (
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             <div>
-              <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">Titre</label>
               <input
                 type="text"
                 id="title"
                 {...register('title', { required: 'Le titre est requis' })}
-                className="block w-full px-4 py-2 rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                className="block w-full px-4 py-2 rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-xl font-bold"
+                placeholder="Titre de ton entrée..."
               />
               {errors.title && <p className="mt-1 text-sm text-red-600">{errors.title.message}</p>}
             </div>
             <div>
-              <label htmlFor="content" className="block text-sm font-medium text-gray-700 mb-1">Contenu</label>
               <textarea
                 id="content"
                 rows={10}
                 {...register('content', { required: 'Le contenu est requis' })}
                 className="block w-full px-4 py-2 rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="Raconte ta journée, tes pensées, tes rêves..."
               ></textarea>
               {errors.content && <p className="mt-1 text-sm text-red-600">{errors.content.message}</p>}
             </div>
             <div>
-              <label htmlFor="tags" className="block text-sm font-medium text-gray-700 mb-1">Tags (séparés par des virgules)</label>
               <input
                 type="text"
                 id="tags"
                 {...register('tags')}
                 className="block w-full px-4 py-2 rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="Tags (séparés par des virgules)"
               />
             </div>
             <div>
               <button
                 type="submit"
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-300"
               >
-                Enregistrer l'entrée
+                Sauvegarder l'entrée
               </button>
             </div>
           </form>
