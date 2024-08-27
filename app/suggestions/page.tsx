@@ -6,7 +6,6 @@ import { CheckCircleIcon, ExclamationCircleIcon } from '@heroicons/react/24/outl
 
 type Inputs = {
   name: string
-  email: string
   category: string
   suggestion: string
 }
@@ -56,7 +55,7 @@ export default function SuggestionPage() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 bg-white shadow-md rounded-lg p-6">
         <div>
           <label htmlFor="name" className="block text-sm font-medium text-gray-700">Nom</label>
           <input
@@ -66,23 +65,6 @@ export default function SuggestionPage() {
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
           />
           {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>}
-        </div>
-
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email</label>
-          <input
-            type="email"
-            id="email"
-            {...register('email', { 
-              required: 'L\'email est requis',
-              pattern: {
-                value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                message: 'Adresse email invalide'
-              }
-            })}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
-          />
-          {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>}
         </div>
 
         <div>
