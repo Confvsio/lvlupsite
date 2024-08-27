@@ -109,6 +109,10 @@ export default function PageMinuteurs() {
       } else {
         setParametresDeepWork(parametres)
       }
+      // Reset the timer if it's currently active
+      if (minuteurActif === type) {
+        setTempsRestant(parametres.dureeTravail)
+      }
     }
   }
 
@@ -206,8 +210,13 @@ export default function PageMinuteurs() {
           {(!minuteurActif || minuteurActif === 'pomodoro') && (
             <motion.div
               key="pomodoro"
-              initial={minuteurActif ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1, gridColumn: minuteurActif === 'pomodoro' ? 'span 2' : 'auto' }}
+              initial={{ opacity: 1, scale: 1 }}
+              animate={{ 
+                opacity: 1, 
+                scale: 1, 
+                gridColumn: minuteurActif === 'pomodoro' ? 'span 2' : 'auto',
+                width: minuteurActif === 'pomodoro' ? '100%' : '100%'
+              }}
               exit={{ opacity: 0, scale: 0.8 }}
               transition={{ duration: 0.5 }}
             >
@@ -223,14 +232,20 @@ export default function PageMinuteurs() {
                 reprendreMinuteur={reprendreMinuteur}
                 arreterMinuteur={arreterMinuteur}
                 formaterTemps={formaterTemps}
+                parametres={parametresPomodoro}
               />
             </motion.div>
           )}
           {(!minuteurActif || minuteurActif === 'deepWork') && (
             <motion.div
               key="deepWork"
-              initial={minuteurActif ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1, gridColumn: minuteurActif === 'deepWork' ? 'span 2' : 'auto' }}
+              initial={{ opacity: 1, scale: 1 }}
+              animate={{ 
+                opacity: 1, 
+                scale: 1, 
+                gridColumn: minuteurActif === 'deepWork' ? 'span 2' : 'auto',
+                width: minuteurActif === 'deepWork' ? '100%' : '100%'
+              }}
               exit={{ opacity: 0, scale: 0.8 }}
               transition={{ duration: 0.5 }}
             >
@@ -246,6 +261,7 @@ export default function PageMinuteurs() {
                 reprendreMinuteur={reprendreMinuteur}
                 arreterMinuteur={arreterMinuteur}
                 formaterTemps={formaterTemps}
+                parametres={parametresDeepWork}
               />
             </motion.div>
           )}
@@ -307,6 +323,7 @@ const CarteMinuteur = ({
   reprendreMinuteur,
   arreterMinuteur,
   formaterTemps,
+  parametres,
 }: {
   titre: string
   minuteurActif: TimerType | null
@@ -319,117 +336,121 @@ const CarteMinuteur = ({
   reprendreMinuteur: () => void
   arreterMinuteur: () => void
   formaterTemps: (secondes: number) => string
+  parametres: TimerSettings
 }) => (
   <div className="bg-white shadow-lg rounded-xl p-8">
     <h2 className="text-2xl font-semibold mb-6">{titre}</h2>
     <div className="text-center">
-      <p className="text-6xl font-bold mb-6 text-indigo-600">{formaterTemps(tempsRestant)}</p>
+      <p className="text-6xl font-bold mb-6 text-indigo-600">
+        {minuteurActif === typeMinuteur ? formaterTemps(tempsRestant) : formaterTemps(parametres.dureeTravail)}
+      </p>
       <p className="text-lg mb-6 text-gray-600">
         {minuteurActif === typeMinuteur
           ? `Phase actuelle : ${phaseActuelle === 'travail' ? 'Travail' : phaseActuelle === 'pauseCourte' ? 'Pause courte' : 'Pause longue'}`
           : 'Minuteur inactif'}
       </p>
       {minuteurActif === typeMinuteur ? (
-        <div className="flex justify-center space-x-4">
-          {estEnCours ? (
-            <button
-              onClick={pauseMinuteur}
-              className="bg-yellow-500 text-white px-6 py-3 rounded-full hover:bg-yellow-600 transition duration-300"
-            >
-              <PauseIcon className="h-6 w-6" />
-            </button>
-          ) : (
-            <button
-              onClick={reprendreMinuteur}
-              className="bg-green-500 text-white px-6 py-3 rounded-full hover:bg-green-600 transition duration-300"            >
-              <PlayIcon className="h-6 w-6" />
-            </button>
-          )}
-          <button
-            onClick={arreterMinuteur}
-            className="bg-red-500 text-white px-6 py-3 rounded-full hover:bg-red-600 transition duration-300"
-          >
-            <StopIcon className="h-6 w-6" />
-          </button>
+                <div className="flex justify-center space-x-4">
+                {estEnCours ? (
+                  <button
+                    onClick={pauseMinuteur}
+                    className="bg-yellow-500 text-white px-6 py-3 rounded-full hover:bg-yellow-600 transition duration-300"
+                  >
+                    <PauseIcon className="h-6 w-6" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={reprendreMinuteur}
+                    className="bg-green-500 text-white px-6 py-3 rounded-full hover:bg-green-600 transition duration-300"
+                  >
+                    <PlayIcon className="h-6 w-6" />
+                  </button>
+                )}
+                <button
+                  onClick={arreterMinuteur}
+                  className="bg-red-500 text-white px-6 py-3 rounded-full hover:bg-red-600 transition duration-300"
+                >
+                  <StopIcon className="h-6 w-6" />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => demarrerMinuteur(typeMinuteur)}
+                className="bg-indigo-600 text-white px-8 py-3 rounded-full hover:bg-indigo-700 transition duration-300 text-lg"
+              >
+                Démarrer
+              </button>
+            )}
+          </div>
         </div>
-      ) : (
-        <button
-          onClick={() => demarrerMinuteur(typeMinuteur)}
-          className="bg-indigo-600 text-white px-8 py-3 rounded-full hover:bg-indigo-700 transition duration-300 text-lg"
-        >
-          Démarrer
-        </button>
-      )}
-    </div>
-  </div>
-)
-
-const CarteParametres = ({
-  titre,
-  parametres,
-  sauvegarderParametres,
-}: {
-  titre: string
-  parametres: TimerSettings
-  sauvegarderParametres: (parametres: TimerSettings) => void
-}) => {
-  const [parametresLocaux, setParametresLocaux] = useState(parametres)
-
-  const gererChangement = (cle: keyof TimerSettings, valeur: number) => {
-    setParametresLocaux({ ...parametresLocaux, [cle]: valeur * 60 }) // Convertir les minutes en secondes
-  }
-
-  const gererSauvegarde = () => {
-    sauvegarderParametres(parametresLocaux)
-  }
-
-  return (
-    <div className="bg-white shadow-lg rounded-xl p-8">
-      <h2 className="text-2xl font-semibold mb-6">{titre}</h2>
-      <div className="space-y-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Durée de travail (minutes)</label>
-          <input
-            type="number"
-            value={parametresLocaux.dureeTravail / 60}
-            onChange={(e) => gererChangement('dureeTravail', parseInt(e.target.value))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Durée de pause courte (minutes)</label>
-          <input
-            type="number"
-            value={parametresLocaux.dureePauseCourte / 60}
-            onChange={(e) => gererChangement('dureePauseCourte', parseInt(e.target.value))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Durée de pause longue (minutes)</label>
-          <input
-            type="number"
-            value={parametresLocaux.dureePauseLongue / 60}
-            onChange={(e) => gererChangement('dureePauseLongue', parseInt(e.target.value))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Sessions avant pause longue</label>
-          <input
-            type="number"
-            value={parametresLocaux.sessionsAvantPauseLongue}
-            onChange={(e) => gererChangement('sessionsAvantPauseLongue', parseInt(e.target.value))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-        </div>
-        <button
-          onClick={gererSauvegarde}
-          className="w-full bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition duration-300"
-        >
-          Enregistrer les paramètres
-        </button>
-      </div>
-    </div>
-  )
-}
+      )
+      
+      const CarteParametres = ({
+        titre,
+        parametres,
+        sauvegarderParametres,
+      }: {
+        titre: string
+        parametres: TimerSettings
+        sauvegarderParametres: (parametres: TimerSettings) => void
+      }) => {
+        const [parametresLocaux, setParametresLocaux] = useState(parametres)
+      
+        const gererChangement = (cle: keyof TimerSettings, valeur: number) => {
+          setParametresLocaux({ ...parametresLocaux, [cle]: valeur * 60 }) // Convertir les minutes en secondes
+        }
+      
+        const gererSauvegarde = () => {
+          sauvegarderParametres(parametresLocaux)
+        }
+      
+        return (
+          <div className="bg-white shadow-lg rounded-xl p-8">
+            <h2 className="text-2xl font-semibold mb-6">{titre}</h2>
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Durée de travail (minutes)</label>
+                <input
+                  type="number"
+                  value={parametresLocaux.dureeTravail / 60}
+                  onChange={(e) => gererChangement('dureeTravail', parseInt(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Durée de pause courte (minutes)</label>
+                <input
+                  type="number"
+                  value={parametresLocaux.dureePauseCourte / 60}
+                  onChange={(e) => gererChangement('dureePauseCourte', parseInt(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Durée de pause longue (minutes)</label>
+                <input
+                  type="number"
+                  value={parametresLocaux.dureePauseLongue / 60}
+                  onChange={(e) => gererChangement('dureePauseLongue', parseInt(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Sessions avant pause longue</label>
+                <input
+                  type="number"
+                  value={parametresLocaux.sessionsAvantPauseLongue}
+                  onChange={(e) => gererChangement('sessionsAvantPauseLongue', parseInt(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <button
+                onClick={gererSauvegarde}
+                className="w-full bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition duration-300"
+              >
+                Enregistrer les paramètres
+              </button>
+            </div>
+          </div>
+        )
+      }
