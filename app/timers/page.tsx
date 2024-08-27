@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
 import { useSupabaseClient, useUser } from '@supabase/auth-helpers-react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { Calendar } from "@/components/ui/calendar"
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay } from 'date-fns'
 import { fr } from 'date-fns/locale'
@@ -25,6 +25,8 @@ interface TimerSession {
   duration: number
   task_name: string
 }
+
+const COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A']
 
 const TimerPage: React.FC = () => {
   const [timerSettings, setTimerSettings] = useState({
@@ -201,6 +203,13 @@ const TimerPage: React.FC = () => {
       .reduce((acc, session) => acc + session.duration, 0)
   }
 
+  const pieChartData = [
+    { name: 'Pomodoro', value: getTotalDuration('pomodoro') },
+    { name: 'Deepwork', value: getTotalDuration('deepwork') },
+    { name: 'Short Break', value: getTotalDuration('shortbreak') },
+    { name: 'Long Break', value: getTotalDuration('longbreak') },
+  ].filter(item => item.value > 0)
+
   const getChartData = () => {
     if (viewMode === 'day') {
       return sessions.map(session => ({
@@ -327,7 +336,7 @@ const TimerPage: React.FC = () => {
                     <span className="text-indigo-700">Sound notifications</span>
                     <Switch checked={soundEnabled} onCheckedChange={setSoundEnabled} />
                   </div>
-                  </motion.div>
+                </motion.div>
               )}
             </AnimatePresence>
           </div>
@@ -394,6 +403,36 @@ const TimerPage: React.FC = () => {
                     )}
                   </LineChart>
                 </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-xl p-8">
+              <h2 className="text-2xl mb-6 text-center text-indigo-700">Time Distribution</h2>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie
+                    data={pieChartData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {pieChartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="mt-4 flex flex-wrap justify-center">
+                {pieChartData.map((entry, index) => (
+                  <div key={index} className="flex items-center mr-4 mb-2">
+                    <div className="w-4 h-4 mr-2" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
+                    <span className="text-sm">{entry.name}: {((entry.value / pieChartData.reduce((acc, curr) => acc + curr.value, 0)) * 100).toFixed(1)}%</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
