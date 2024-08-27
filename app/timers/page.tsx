@@ -146,7 +146,7 @@ const TimerPage: React.FC = () => {
 
   const pieChartData = [
     { name: 'Pomodoro', value: getTotalDuration('pomodoro') },
-    { name: 'Travail Profond', value: getTotalDuration('deepwork') },
+    { name: 'Deepwork', value: getTotalDuration('deepwork') },
     { name: 'Pause Courte', value: getTotalDuration('shortbreak') },
     { name: 'Pause Longue', value: getTotalDuration('longbreak') },
   ].filter(item => item.value > 0)
@@ -182,7 +182,7 @@ const TimerPage: React.FC = () => {
 
   return (
     <div className="container mx-auto p-4 min-h-screen bg-gray-100">
-      <h1 className="text-4xl font-bold mb-8 text-center text-gray-800">Minuteur de Productivité</h1>
+      <h1 className="text-4xl font-bold mb-8 text-center text-gray-800">Timers</h1>
       
       <div className="flex flex-col items-center mb-8">
         <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
@@ -197,7 +197,7 @@ const TimerPage: React.FC = () => {
               >
                 <h2 className="text-2xl mb-4">{
                   activeTimer === 'pomodoro' ? 'Pomodoro' :
-                  activeTimer === 'deepwork' ? 'Travail Profond' :
+                  activeTimer === 'deepwork' ? 'Deepwork' :
                   activeTimer === 'shortbreak' ? 'Pause Courte' : 'Pause Longue'
                 }</h2>
                 <p className="text-6xl font-bold mb-8">
@@ -214,7 +214,7 @@ const TimerPage: React.FC = () => {
                 className="grid grid-cols-2 gap-4"
               >
                 <Button onClick={() => startTimer('pomodoro')} className="h-24">Pomodoro<br/>{pomodoroTime}m</Button>
-                <Button onClick={() => startTimer('deepwork')} className="h-24">Travail Profond<br/>{deepWorkTime}m</Button>
+                <Button onClick={() => startTimer('deepwork')} className="h-24">Deepwork<br/>{deepWorkTime}m</Button>
                 <Button onClick={() => startTimer('shortbreak')} className="h-24">Pause Courte<br/>{shortBreakTime}m</Button>
                 <Button onClick={() => startTimer('longbreak')} className="h-24">Pause Longue<br/>{longBreakTime}m</Button>
               </motion.div>
@@ -240,7 +240,7 @@ const TimerPage: React.FC = () => {
             <Tabs defaultValue="pomodoro">
               <TabsList className="mb-4 grid w-full grid-cols-4">
                 <TabsTrigger value="pomodoro">Pomodoro</TabsTrigger>
-                <TabsTrigger value="deepwork">Travail Profond</TabsTrigger>
+                <TabsTrigger value="deepwork">Deepwork</TabsTrigger>
                 <TabsTrigger value="shortbreak">Pause Courte</TabsTrigger>
                 <TabsTrigger value="longbreak">Pause Longue</TabsTrigger>
               </TabsList>
@@ -294,22 +294,21 @@ const TimerPage: React.FC = () => {
                 <h3 className="text-xl mb-2 text-center">Distribution du Temps</h3>
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
-                    <Pie
+                  <Pie
                       data={pieChartData}
                       cx="50%"
                       cy="50%"
-                      labelLine={true}
+                      labelLine={false}
                       outerRadius={80}
                       fill="#8884d8"
                       dataKey="value"
-                      label={({ name, percent }) => percent > 0 ? `${name} ${(percent * 100).toFixed(0)}%` : ''}
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                     >
                       {pieChartData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
                     <Tooltip />
-                    <Legend layout="vertical" align="right" verticalAlign="middle" />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -337,7 +336,7 @@ const TimerPage: React.FC = () => {
                       <Tooltip />
                       <Legend />
                       <Bar dataKey="pomodoro" fill="#8884d8" name="Pomodoro" />
-                      <Bar dataKey="deepwork" fill="#82ca9d" name="Travail Profond" />
+                      <Bar dataKey="deepwork" fill="#82ca9d" name="Deepwork" />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
@@ -353,23 +352,23 @@ const TimerPage: React.FC = () => {
               locale={fr}
             />
             <div className="mt-4">
-              <h3 className="text-xl mb-2">Statistiques Rapides</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <h4 className="font-semibold">Total Pomodoros</h4>
-                  <p>{analyticsData.filter(s => s.type === 'pomodoro').length}</p>
+              <h3 className="text-xl mb-2 text-center">Statistiques Rapides</h3>
+              <div className="grid grid-cols-2 gap-6 p-4 bg-gray-50 rounded-lg">
+                <div className="bg-white p-3 rounded shadow">
+                  <h4 className="font-semibold text-sm">Total Pomodoros</h4>
+                  <p className="text-lg">{analyticsData.filter(s => s.type === 'pomodoro').length}</p>
                 </div>
-                <div>
-                  <h4 className="font-semibold">Total Travail Profond</h4>
-                  <p>{analyticsData.filter(s => s.type === 'deepwork').length}</p>
+                <div className="bg-white p-3 rounded shadow">
+                  <h4 className="font-semibold text-sm">Total Deepwork</h4>
+                  <p className="text-lg">{analyticsData.filter(s => s.type === 'deepwork').length}</p>
                 </div>
-                <div>
-                  <h4 className="font-semibold">Temps Productif</h4>
-                  <p>{formatTime(getTotalDuration('pomodoro') + getTotalDuration('deepwork'))}</p>
+                <div className="bg-white p-3 rounded shadow">
+                  <h4 className="font-semibold text-sm">Temps Productif</h4>
+                  <p className="text-lg">{formatTime(getTotalDuration('pomodoro') + getTotalDuration('deepwork'))}</p>
                 </div>
-                <div>
-                  <h4 className="font-semibold">Temps de Pause</h4>
-                  <p>{formatTime(getTotalDuration('shortbreak') + getTotalDuration('longbreak'))}</p>
+                <div className="bg-white p-3 rounded shadow">
+                  <h4 className="font-semibold text-sm">Temps de Pause</h4>
+                  <p className="text-lg">{formatTime(getTotalDuration('shortbreak') + getTotalDuration('longbreak'))}</p>
                 </div>
               </div>
             </div>
@@ -384,12 +383,12 @@ const TimerPage: React.FC = () => {
                   <span className="font-semibold">{format(new Date(session.start_time), 'HH:mm', { locale: fr })}</span>
                   <span className="ml-2">{
                     session.type === 'pomodoro' ? 'Pomodoro' :
-                    session.type === 'deepwork' ? 'Travail Profond' :
+                    session.type === 'deepwork' ? 'Deepwork' :
                     session.type === 'shortbreak' ? 'Pause Courte' : 'Pause Longue'
                   }</span>
                 </span>
                 <span>
-                  {session.duration.toFixed(1)} minutes
+                  {Math.floor(session.duration)}:{Math.round((session.duration % 1) * 60).toString().padStart(2, '0')}
                   {session.task_name && <span className="ml-2 text-gray-600">({session.task_name})</span>}
                 </span>
               </li>
