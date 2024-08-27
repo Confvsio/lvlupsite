@@ -10,12 +10,8 @@ export default function Navbar() {
   const supabase = useSupabaseClient()
   const router = useRouter()
   const user = useUser()
-  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false)
-  const [isGoalsDropdownOpen, setIsGoalsDropdownOpen] = useState(false)
-  const [isToolsDropdownOpen, setIsToolsDropdownOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [username, setUsername] = useState<string>('Profil')
-  const dropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (user) {
@@ -28,18 +24,6 @@ export default function Navbar() {
     await supabase.auth.signOut()
     router.push('/')
   }
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsProfileDropdownOpen(false)
-        setIsGoalsDropdownOpen(false)
-        setIsToolsDropdownOpen(false)
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [dropdownRef])
 
   return (
     <nav className="bg-white border-b border-gray-200 bg-cyan-15">
@@ -74,31 +58,13 @@ export default function Navbar() {
             
             <NavLink href="/social">Social</NavLink>
             
-            <div className="relative" ref={dropdownRef}>
-              <button 
-                onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
-                className="flex items-center space-x-1 text-gray-800 hover:text-indigo-600 transition duration-300 px-3 py-2 rounded-md text-sm font-medium"
-              >
-                <span>{username}</span>
-                <ChevronDownIcon className="h-4 w-4" />
-              </button>
-              {isProfileDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
-                  <Link 
-                    href="/profile" 
-                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-indigo-100"
-                  >
-                    Voir le profil
-                  </Link>
-                  <button 
-                    onClick={handleLogout}
-                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-indigo-100"
-                  >
-                    Déconnexion
-                  </button>
-                </div>
-              )}
-            </div>
+            <DropdownMenu 
+              title={username}
+              items={[
+                { href: '/profile', label: 'Voir le profil' },
+                { href: '#', label: 'Déconnexion', onClick: handleLogout },
+              ]}
+            />
           </div>
 
           {/* Mobile menu button */}
@@ -163,14 +129,16 @@ function NavLink({ href, children }: { href: string, children: React.ReactNode }
   )
 }
 
-function DropdownMenu({ title, items }: { title: string, items: { href: string, label: string }[] }) {
+function DropdownMenu({ title, items }: { title: string, items: { href: string, label: string, onClick?: () => void }[] }) {
   const [isOpen, setIsOpen] = useState(false)
 
   return (
-    <div className="relative" onMouseLeave={() => setIsOpen(false)}>
+    <div 
+      className="relative" 
+      onMouseEnter={() => setIsOpen(true)}
+      onMouseLeave={() => setIsOpen(false)}
+    >
       <button 
-        onClick={() => setIsOpen(!isOpen)}
-        onMouseEnter={() => setIsOpen(true)}
         className="flex items-center space-x-1 text-gray-800 hover:text-indigo-600 transition duration-300 px-3 py-2 rounded-md text-sm font-medium"
       >
         <span>{title}</span>
@@ -179,17 +147,25 @@ function DropdownMenu({ title, items }: { title: string, items: { href: string, 
       {isOpen && (
         <div 
           className="absolute left-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10"
-          onMouseEnter={() => setIsOpen(true)}
-          onMouseLeave={() => setIsOpen(false)}
         >
           {items.map((item, index) => (
-            <Link 
-              key={index}
-              href={item.href} 
-              className="block px-4 py-2 text-sm text-gray-700 hover:bg-indigo-100"
-            >
-              {item.label}
-            </Link>
+            item.onClick ? (
+              <button
+                key={index}
+                onClick={item.onClick}
+                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-indigo-100"
+              >
+                {item.label}
+              </button>
+            ) : (
+              <Link 
+                key={index}
+                href={item.href} 
+                className="block px-4 py-2 text-sm text-gray-700 hover:bg-indigo-100"
+              >
+                {item.label}
+              </Link>
+            )
           ))}
         </div>
       )}
