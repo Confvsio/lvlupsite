@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import { Roboto_Slab } from 'next/font/google'
 import SupabaseProvider from './supabase-provider'
 import NavbarWrapper from '../components/NavbarWrapper'
+import { Analytics } from "@vercel/analytics/react"
 
 export const metadata: Metadata = {
   title: "Lvl'Up",
@@ -31,6 +32,7 @@ export default function RootLayout({
         <SupabaseProvider>
           <NavbarWrapper />
           {children}
+          <Analytics/>
         </SupabaseProvider>
       </body>
     </html>
