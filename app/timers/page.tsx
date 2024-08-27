@@ -24,30 +24,33 @@ interface TimerSession {
   date: string
 }
 
-const parametresPomodoroPardDefaut: TimerSettings = {
-  dureeTravail: 25 * 60,
-  dureePauseCourte: 5 * 60,
-  dureePauseLongue: 15 * 60,
-  sessionsAvantPauseLongue: 4,
-}
-
-const parametresDeepWorkParDefaut: TimerSettings = {
-  dureeTravail: 90 * 60,
-  dureePauseCourte: 10 * 60,
-  dureePauseLongue: 30 * 60,
-  sessionsAvantPauseLongue: 2,
+const parametresParDefaut: Record<TimerType, TimerSettings> = {
+  pomodoro: {
+    dureeTravail: 25 * 60,
+    dureePauseCourte: 5 * 60,
+    dureePauseLongue: 15 * 60,
+    sessionsAvantPauseLongue: 4,
+  },
+  deepWork: {
+    dureeTravail: 90 * 60,
+    dureePauseCourte: 10 * 60,
+    dureePauseLongue: 30 * 60,
+    sessionsAvantPauseLongue: 2,
+  },
 }
 
 export default function PageMinuteurs() {
   const utilisateur = useUser()
   const supabase = useSupabaseClient()
   const [minuteurActif, setMinuteurActif] = useState<TimerType | null>(null)
-  const [tempsRestant, setTempsRestant] = useState(0)
+  const [tempsRestant, setTempsRestant] = useState<Record<TimerType, number>>({
+    pomodoro: parametresParDefaut.pomodoro.dureeTravail,
+    deepWork: parametresParDefaut.deepWork.dureeTravail,
+  })
   const [estEnCours, setEstEnCours] = useState(false)
   const [phaseActuelle, setPhaseActuelle] = useState<TimerPhase>('travail')
   const [nombreSessions, setNombreSessions] = useState(0)
-  const [parametresPomodoro, setParametresPomodoro] = useState(parametresPomodoroPardDefaut)
-  const [parametresDeepWork, setParametresDeepWork] = useState(parametresDeepWorkParDefaut)
+  const [parametres, setParametres] = useState<Record<TimerType, TimerSettings>>(parametresParDefaut)
   const [afficherParametres, setAfficherParametres] = useState(false)
   const [donneesAnalytiques, setDonneesAnalytiques] = useState<TimerSession[]>([])
 
@@ -60,58 +63,49 @@ export default function PageMinuteurs() {
 
   useEffect(() => {
     let intervalle: NodeJS.Timeout | null = null
-    if (estEnCours && tempsRestant > 0) {
+    if (estEnCours && minuteurActif && tempsRestant[minuteurActif] > 0) {
       intervalle = setInterval(() => {
-        setTempsRestant((tempsPrecedent) => tempsPrecedent - 1)
+        setTempsRestant(prev => ({
+          ...prev,
+          [minuteurActif]: prev[minuteurActif] - 1
+        }))
       }, 1000)
-    } else if (tempsRestant === 0 && estEnCours) {
+    } else if (minuteurActif && tempsRestant[minuteurActif] === 0 && estEnCours) {
       gererFinPhase()
     }
     return () => {
       if (intervalle) clearInterval(intervalle)
     }
-  }, [estEnCours, tempsRestant])
+  }, [estEnCours, minuteurActif, tempsRestant])
 
   const recupererParametres = async () => {
-    const { data: donneesPomodoro, error: erreurPomodoro } = await supabase
-      .from('parametres_minuteur')
-      .select('*')
-      .eq('user_id', utilisateur?.id)
-      .eq('type', 'pomodoro')
-      .single()
+    for (const type of ['pomodoro', 'deepWork'] as TimerType[]) {
+      const { data, error } = await supabase
+        .from('parametres_minuteur')
+        .select('*')
+        .eq('user_id', utilisateur?.id)
+        .eq('type', type)
+        .single()
 
-    if (!erreurPomodoro && donneesPomodoro) {
-      setParametresPomodoro(donneesPomodoro.parametres)
-    }
-
-    const { data: donneesDeepWork, error: erreurDeepWork } = await supabase
-      .from('parametres_minuteur')
-      .select('*')
-      .eq('user_id', utilisateur?.id)
-      .eq('type', 'deepWork')
-      .single()
-
-    if (!erreurDeepWork && donneesDeepWork) {
-      setParametresDeepWork(donneesDeepWork.parametres)
+      if (!error && data) {
+        setParametres(prev => ({ ...prev, [type]: data.parametres }))
+        setTempsRestant(prev => ({ ...prev, [type]: data.parametres.dureeTravail }))
+      }
     }
   }
 
-  const sauvegarderParametres = async (type: TimerType, parametres: TimerSettings) => {
+  const sauvegarderParametres = async (type: TimerType, nouveauxParametres: TimerSettings) => {
     const { error } = await supabase
       .from('parametres_minuteur')
-      .upsert({ user_id: utilisateur?.id, type, parametres })
+      .upsert({ user_id: utilisateur?.id, type, parametres: nouveauxParametres })
 
     if (error) {
       console.error('Erreur lors de la sauvegarde des paramètres:', error)
     } else {
-      if (type === 'pomodoro') {
-        setParametresPomodoro(parametres)
-      } else {
-        setParametresDeepWork(parametres)
-      }
-      // Reset the timer if it's currently active
+      setParametres(prev => ({ ...prev, [type]: nouveauxParametres }))
+      setTempsRestant(prev => ({ ...prev, [type]: nouveauxParametres.dureeTravail }))
       if (minuteurActif === type) {
-        setTempsRestant(parametres.dureeTravail)
+        setTempsRestant(prev => ({ ...prev, [type]: nouveauxParametres.dureeTravail }))
       }
     }
   }
@@ -135,8 +129,7 @@ export default function PageMinuteurs() {
     setMinuteurActif(type)
     setPhaseActuelle('travail')
     setNombreSessions(0)
-    const parametres = type === 'pomodoro' ? parametresPomodoro : parametresDeepWork
-    setTempsRestant(parametres.dureeTravail)
+    setTempsRestant(prev => ({ ...prev, [type]: parametres[type].dureeTravail }))
     setEstEnCours(true)
   }
 
@@ -151,27 +144,30 @@ export default function PageMinuteurs() {
   const arreterMinuteur = () => {
     setEstEnCours(false)
     setMinuteurActif(null)
-    setTempsRestant(0)
+    setTempsRestant(prev => ({
+      ...prev,
+      [minuteurActif as TimerType]: parametres[minuteurActif as TimerType].dureeTravail
+    }))
     setNombreSessions(0)
   }
 
   const gererFinPhase = async () => {
     if (!minuteurActif) return
 
-    const parametres = minuteurActif === 'pomodoro' ? parametresPomodoro : parametresDeepWork
+    const parametresActuels = parametres[minuteurActif]
     let prochainePhase: TimerPhase = 'travail'
-    let prochaineDuree = parametres.dureeTravail
+    let prochaineDuree = parametresActuels.dureeTravail
 
     if (phaseActuelle === 'travail') {
       const nouveauNombreSessions = nombreSessions + 1
       setNombreSessions(nouveauNombreSessions)
 
-      if (nouveauNombreSessions % parametres.sessionsAvantPauseLongue === 0) {
+      if (nouveauNombreSessions % parametresActuels.sessionsAvantPauseLongue === 0) {
         prochainePhase = 'pauseLongue'
-        prochaineDuree = parametres.dureePauseLongue
+        prochaineDuree = parametresActuels.dureePauseLongue
       } else {
         prochainePhase = 'pauseCourte'
-        prochaineDuree = parametres.dureePauseCourte
+        prochaineDuree = parametresActuels.dureePauseCourte
       }
 
       // Enregistrer la session de travail terminée
@@ -180,7 +176,7 @@ export default function PageMinuteurs() {
         .insert({
           user_id: utilisateur?.id,
           type: minuteurActif,
-          duree: parametres.dureeTravail,
+          duree: parametresActuels.dureeTravail,
           date: new Date().toISOString().split('T')[0],
         })
 
@@ -192,7 +188,7 @@ export default function PageMinuteurs() {
     }
 
     setPhaseActuelle(prochainePhase)
-    setTempsRestant(prochaineDuree)
+    setTempsRestant(prev => ({ ...prev, [minuteurActif]: prochaineDuree }))
   }
 
   const formaterTemps = (secondes: number) => {
@@ -207,64 +203,36 @@ export default function PageMinuteurs() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
         <AnimatePresence>
-          {(!minuteurActif || minuteurActif === 'pomodoro') && (
-            <motion.div
-              key="pomodoro"
-              initial={{ opacity: 1, scale: 1 }}
-              animate={{ 
-                opacity: 1, 
-                scale: 1, 
-                gridColumn: minuteurActif === 'pomodoro' ? 'span 2' : 'auto',
-                width: minuteurActif === 'pomodoro' ? '100%' : '100%'
-              }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              transition={{ duration: 0.5 }}
-            >
-              <CarteMinuteur
-                titre="Pomodoro"
-                minuteurActif={minuteurActif}
-                typeMinuteur="pomodoro"
-                tempsRestant={tempsRestant}
-                estEnCours={estEnCours}
-                phaseActuelle={phaseActuelle}
-                demarrerMinuteur={demarrerMinuteur}
-                pauseMinuteur={pauseMinuteur}
-                reprendreMinuteur={reprendreMinuteur}
-                arreterMinuteur={arreterMinuteur}
-                formaterTemps={formaterTemps}
-                parametres={parametresPomodoro}
-              />
-            </motion.div>
-          )}
-          {(!minuteurActif || minuteurActif === 'deepWork') && (
-            <motion.div
-              key="deepWork"
-              initial={{ opacity: 1, scale: 1 }}
-              animate={{ 
-                opacity: 1, 
-                scale: 1, 
-                gridColumn: minuteurActif === 'deepWork' ? 'span 2' : 'auto',
-                width: minuteurActif === 'deepWork' ? '100%' : '100%'
-              }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              transition={{ duration: 0.5 }}
-            >
-              <CarteMinuteur
-                titre="Deep Work"
-                minuteurActif={minuteurActif}
-                typeMinuteur="deepWork"
-                tempsRestant={tempsRestant}
-                estEnCours={estEnCours}
-                phaseActuelle={phaseActuelle}
-                demarrerMinuteur={demarrerMinuteur}
-                pauseMinuteur={pauseMinuteur}
-                reprendreMinuteur={reprendreMinuteur}
-                arreterMinuteur={arreterMinuteur}
-                formaterTemps={formaterTemps}
-                parametres={parametresDeepWork}
-              />
-            </motion.div>
-          )}
+          {['pomodoro', 'deepWork'].map((type) => (
+            (!minuteurActif || minuteurActif === type) && (
+              <motion.div
+                key={type}
+                initial={{ opacity: 1, scale: 1 }}
+                animate={{ 
+                  opacity: 1, 
+                  scale: 1, 
+                  gridColumn: minuteurActif === type ? 'span 2' : 'auto',
+                  width: '100%'
+                }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                transition={{ duration: 0.5 }}
+              >
+                <CarteMinuteur
+                  titre={type === 'pomodoro' ? 'Pomodoro' : 'Deep Work'}
+                  minuteurActif={minuteurActif}
+                  typeMinuteur={type as TimerType}
+                  tempsRestant={tempsRestant[type as TimerType]}
+                  estEnCours={estEnCours}
+                  phaseActuelle={phaseActuelle}
+                  demarrerMinuteur={demarrerMinuteur}
+                  pauseMinuteur={pauseMinuteur}
+                  reprendreMinuteur={reprendreMinuteur}
+                  arreterMinuteur={arreterMinuteur}
+                  formaterTemps={formaterTemps}
+                />
+              </motion.div>
+            )
+          ))}
         </AnimatePresence>
       </div>
 
@@ -278,16 +246,14 @@ export default function PageMinuteurs() {
 
       {afficherParametres && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
-          <CarteParametres
-            titre="Paramètres Pomodoro"
-            parametres={parametresPomodoro}
-            sauvegarderParametres={(nouveauxParametres) => sauvegarderParametres('pomodoro', nouveauxParametres)}
-          />
-          <CarteParametres
-            titre="Paramètres Deep Work"
-            parametres={parametresDeepWork}
-            sauvegarderParametres={(nouveauxParametres) => sauvegarderParametres('deepWork', nouveauxParametres)}
-          />
+          {['pomodoro', 'deepWork'].map((type) => (
+            <CarteParametres
+              key={type}
+              titre={type === 'pomodoro' ? 'Paramètres Pomodoro' : 'Paramètres Deep Work'}
+              parametres={parametres[type as TimerType]}
+              sauvegarderParametres={(nouveauxParametres) => sauvegarderParametres(type as TimerType, nouveauxParametres)}
+            />
+          ))}
         </div>
       )}
 
@@ -323,7 +289,6 @@ const CarteMinuteur = ({
   reprendreMinuteur,
   arreterMinuteur,
   formaterTemps,
-  parametres,
 }: {
   titre: string
   minuteurActif: TimerType | null
@@ -336,121 +301,122 @@ const CarteMinuteur = ({
   reprendreMinuteur: () => void
   arreterMinuteur: () => void
   formaterTemps: (secondes: number) => string
-  parametres: TimerSettings
 }) => (
   <div className="bg-white shadow-lg rounded-xl p-8">
     <h2 className="text-2xl font-semibold mb-6">{titre}</h2>
     <div className="text-center">
-      <p className="text-6xl font-bold mb-6 text-indigo-600">
-        {minuteurActif === typeMinuteur ? formaterTemps(tempsRestant) : formaterTemps(parametres.dureeTravail)}
-      </p>
+      <p className="text-6xl font-bold mb-6 text-indigo-600">{formaterTemps(tempsRestant)}</p>
       <p className="text-lg mb-6 text-gray-600">
         {minuteurActif === typeMinuteur
           ? `Phase actuelle : ${phaseActuelle === 'travail' ? 'Travail' : phaseActuelle === 'pauseCourte' ? 'Pause courte' : 'Pause longue'}`
           : 'Minuteur inactif'}
       </p>
       {minuteurActif === typeMinuteur ? (
-                <div className="flex justify-center space-x-4">
-                {estEnCours ? (
-                  <button
-                    onClick={pauseMinuteur}
-                    className="bg-yellow-500 text-white px-6 py-3 rounded-full hover:bg-yellow-600 transition duration-300"
-                  >
-                    <PauseIcon className="h-6 w-6" />
-                  </button>
-                ) : (
-                  <button
-                    onClick={reprendreMinuteur}
-                    className="bg-green-500 text-white px-6 py-3 rounded-full hover:bg-green-600 transition duration-300"
-                  >
-                    <PlayIcon className="h-6 w-6" />
-                  </button>
-                )}
-                <button
-                  onClick={arreterMinuteur}
-                  className="bg-red-500 text-white px-6 py-3 rounded-full hover:bg-red-600 transition duration-300"
-                >
-                  <StopIcon className="h-6 w-6" />
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => demarrerMinuteur(typeMinuteur)}
-                className="bg-indigo-600 text-white px-8 py-3 rounded-full hover:bg-indigo-700 transition duration-300 text-lg"
-              >
-                Démarrer
-              </button>
-            )}
-          </div>
+        <div className="flex justify-center space-x-4">
+          {estEnCours ? (
+            <button
+              onClick={pauseMinuteur}
+              className="bg-yellow-500 text-white px-6 py-3 rounded-full hover:bg-yellow-600 transition duration-300"
+            >
+              <PauseIcon className="h-6 w-6" />
+            </button>
+          ) : (
+            <button
+              onClick={reprendreMinuteur}
+              className="bg-green-500 text-white px-6 py-3 rounded-full hover:bg-green-600 transition duration-300"
+            >
+              <PlayIcon className="h-6 w-6" />
+            </button>
+          )}
+          <button
+            onClick={arreterMinuteur}
+            className="bg-red-500 text-white px-6 py-3 rounded-full hover:bg-red-600 transition duration-300"
+          >
+            <StopIcon className="h-6 w-6" />
+          </button>
         </div>
-      )
-      
-      const CarteParametres = ({
-        titre,
-        parametres,
-        sauvegarderParametres,
-      }: {
-        titre: string
-        parametres: TimerSettings
-        sauvegarderParametres: (parametres: TimerSettings) => void
-      }) => {
-        const [parametresLocaux, setParametresLocaux] = useState(parametres)
-      
-        const gererChangement = (cle: keyof TimerSettings, valeur: number) => {
-          setParametresLocaux({ ...parametresLocaux, [cle]: valeur * 60 }) // Convertir les minutes en secondes
-        }
-      
-        const gererSauvegarde = () => {
-          sauvegarderParametres(parametresLocaux)
-        }
-      
-        return (
-          <div className="bg-white shadow-lg rounded-xl p-8">
-            <h2 className="text-2xl font-semibold mb-6">{titre}</h2>
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Durée de travail (minutes)</label>
-                <input
-                  type="number"
-                  value={parametresLocaux.dureeTravail / 60}
-                  onChange={(e) => gererChangement('dureeTravail', parseInt(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Durée de pause courte (minutes)</label>
-                <input
-                  type="number"
-                  value={parametresLocaux.dureePauseCourte / 60}
-                  onChange={(e) => gererChangement('dureePauseCourte', parseInt(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Durée de pause longue (minutes)</label>
-                <input
-                  type="number"
-                  value={parametresLocaux.dureePauseLongue / 60}
-                  onChange={(e) => gererChangement('dureePauseLongue', parseInt(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Sessions avant pause longue</label>
-                <input
-                  type="number"
-                  value={parametresLocaux.sessionsAvantPauseLongue}
-                  onChange={(e) => gererChangement('sessionsAvantPauseLongue', parseInt(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-              <button
-                onClick={gererSauvegarde}
-                className="w-full bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition duration-300"
-              >
-                Enregistrer les paramètres
-              </button>
-            </div>
+      ) : (
+        <button
+          onClick={() => demarrerMinuteur(typeMinuteur)}
+          className="bg-indigo-600 text-white px-8 py-3 rounded-full hover:bg-indigo-700 transition duration-300 text-lg"
+          >
+            Démarrer
+          </button>
+        )}
+      </div>
+    </div>
+  )
+  
+  const CarteParametres = ({
+    titre,
+    parametres,
+    sauvegarderParametres,
+  }: {
+    titre: string
+    parametres: TimerSettings
+    sauvegarderParametres: (parametres: TimerSettings) => void
+  }) => {
+    const [parametresLocaux, setParametresLocaux] = useState(parametres)
+  
+    useEffect(() => {
+      setParametresLocaux(parametres)
+    }, [parametres])
+  
+    const gererChangement = (cle: keyof TimerSettings, valeur: number) => {
+      setParametresLocaux(prev => ({ ...prev, [cle]: valeur * 60 })) // Convertir les minutes en secondes
+    }
+  
+    const gererSauvegarde = () => {
+      sauvegarderParametres(parametresLocaux)
+    }
+  
+    return (
+      <div className="bg-white shadow-lg rounded-xl p-8">
+        <h2 className="text-2xl font-semibold mb-6">{titre}</h2>
+        <div className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Durée de travail (minutes)</label>
+            <input
+              type="number"
+              value={parametresLocaux.dureeTravail / 60}
+              onChange={(e) => gererChangement('dureeTravail', parseInt(e.target.value))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
           </div>
-        )
-      }
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Durée de pause courte (minutes)</label>
+            <input
+              type="number"
+              value={parametresLocaux.dureePauseCourte / 60}
+              onChange={(e) => gererChangement('dureePauseCourte', parseInt(e.target.value))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Durée de pause longue (minutes)</label>
+            <input
+              type="number"
+              value={parametresLocaux.dureePauseLongue / 60}
+              onChange={(e) => gererChangement('dureePauseLongue', parseInt(e.target.value))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Sessions avant pause longue</label>
+            <input
+              type="number"
+              value={parametresLocaux.sessionsAvantPauseLongue}
+              onChange={(e) => gererChangement('sessionsAvantPauseLongue', parseInt(e.target.value))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <button
+            onClick={gererSauvegarde}
+            className="w-full bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition duration-300"
+          >
+            Enregistrer les paramètres
+          </button>
+        </div>
+      </div>
+    )
+  }
