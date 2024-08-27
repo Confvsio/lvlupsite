@@ -9,19 +9,18 @@ import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
 import { useSupabaseClient } from '@supabase/auth-helpers-react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts'
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
 import { Calendar } from "@/components/ui/calendar"
-import { format, startOfWeek, endOfWeek } from 'date-fns'
+import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { Settings } from 'lucide-react'
 
-interface SessionData {
+interface TimerSession {
   id: string;
-  start_time: string;
-  end_time?: string;
-  type: string;
+  type: 'pomodoro' | 'deepwork' | 'shortbreak' | 'longbreak';
+  startTime: Date;
   duration: number;
-  task_name?: string;
+  taskName?: string;
 }
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
@@ -31,76 +30,76 @@ const TimerPage: React.FC = () => {
   const [deepWorkTime, setDeepWorkTime] = useState(60)
   const [shortBreakTime, setShortBreakTime] = useState(5)
   const [longBreakTime, setLongBreakTime] = useState(15)
-  const [activeTimer, setActiveTimer] = useState<'pomodoro' | 'deepwork' | 'shortbreak' | 'longbreak' | null>(null)
+  const [activeTimer, setActiveTimer] = useState<TimerSession | null>(null)
   const [timeLeft, setTimeLeft] = useState(0)
   const [autoStartBreaks, setAutoStartBreaks] = useState(false)
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [taskName, setTaskName] = useState('')
-  const [analyticsData, setAnalyticsData] = useState<SessionData[]>([])
+  const [sessions, setSessions] = useState<TimerSession[]>([])
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const [showSettings, setShowSettings] = useState(false)
-  const [viewMode, setViewMode] = useState<'day' | 'week'>('day')
   const supabase = useSupabaseClient()
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const timerRef = useRef<NodeJS.Timeout | null>(null)
-  const startTimeRef = useRef<Date | null>(null)
-  const [activeSessionStart, setActiveSessionStart] = useState<Date | null>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     audioRef.current = new Audio('/notification.mp3')
-    fetchAnalytics()
+    fetchSessions()
   }, [])
 
   useEffect(() => {
-    if (activeTimer && timeLeft > 0) {
-      timerRef.current = setInterval(() => {
-        setTimeLeft(prev => prev - 1)
+    if (activeTimer) {
+      intervalRef.current = setInterval(() => {
+        setTimeLeft(prev => {
+          if (prev <= 1) {
+            clearInterval(intervalRef.current!)
+            handleTimerComplete()
+            return 0
+          }
+          return prev - 1
+        })
       }, 1000)
-    } else if (activeTimer && timeLeft === 0) {
-      handleTimerComplete()
     }
 
     return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current)
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
       }
     }
-  }, [activeTimer, timeLeft])
+  }, [activeTimer])
 
   useEffect(() => {
-    fetchAnalytics()
-  }, [selectedDate, viewMode])
+    fetchSessions()
+  }, [selectedDate])
 
   const startTimer = async (type: 'pomodoro' | 'deepwork' | 'shortbreak' | 'longbreak') => {
-    const startTime = new Date();
-    setActiveTimer(type);
-    setTimeLeft(getTimerDuration(type));
-    setActiveSessionStart(startTime);
-    const { data, error } = await supabase.from('sessions').insert({
-      type: type,
-      start_time: startTime.toISOString(),
+    const duration = getTimerDuration(type)
+    const newSession: TimerSession = {
+      id: Date.now().toString(),
+      type,
+      startTime: new Date(),
       duration: 0,
-      task_name: taskName
-    }).select();
-    if (error) console.error('Erreur lors du démarrage du minuteur:', error);
+      taskName
+    }
+    setActiveTimer(newSession)
+    setTimeLeft(duration)
+    const { error } = await supabase.from('sessions').insert(newSession)
+    if (error) console.error('Error starting timer:', error)
   }
 
   const stopTimer = async () => {
-    if (activeTimer && activeSessionStart) {
-      const endTime = new Date();
-      const actualDuration = (endTime.getTime() - activeSessionStart.getTime()) / 60000; // Convert to minutes
+    if (activeTimer) {
+      const endTime = new Date()
+      const actualDuration = (endTime.getTime() - activeTimer.startTime.getTime()) / 60000
       const { error } = await supabase.from('sessions').update({
-        end_time: endTime.toISOString(),
         duration: actualDuration
-      }).eq('start_time', activeSessionStart.toISOString());
-      if (error) console.error('Erreur lors de l\'arrêt du minuteur:', error);
-      else fetchAnalytics();
-    }
-    setActiveTimer(null);
-    setTimeLeft(0);
-    setActiveSessionStart(null);
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
+      }).eq('id', activeTimer.id)
+      if (error) console.error('Error stopping timer:', error)
+      else {
+        setActiveTimer(null)
+        setTimeLeft(0)
+        fetchSessions()
+      }
     }
   }
 
@@ -108,10 +107,9 @@ const TimerPage: React.FC = () => {
     if (soundEnabled && audioRef.current) {
       audioRef.current.play()
     }
-    if (autoStartBreaks && activeTimer === 'pomodoro') {
+    stopTimer()
+    if (autoStartBreaks && activeTimer?.type === 'pomodoro') {
       startTimer('shortbreak')
-    } else {
-      stopTimer()
     }
   }
 
@@ -125,35 +123,29 @@ const TimerPage: React.FC = () => {
     }
   }
 
-  const fetchAnalytics = async () => {
-    let start, end;
-    if (viewMode === 'day') {
-      start = new Date(selectedDate)
-      start.setHours(0, 0, 0, 0)
-      end = new Date(selectedDate)
-      end.setHours(23, 59, 59, 999)
-    } else {
-      start = startOfWeek(selectedDate, { weekStartsOn: 1 })
-      end = endOfWeek(selectedDate, { weekStartsOn: 1 })
-    }
+  const fetchSessions = async () => {
+    const startOfDay = new Date(selectedDate)
+    startOfDay.setHours(0, 0, 0, 0)
+    const endOfDay = new Date(selectedDate)
+    endOfDay.setHours(23, 59, 59, 999)
 
     const { data, error } = await supabase
       .from('sessions')
       .select('*')
-      .gte('start_time', start.toISOString())
-      .lte('start_time', end.toISOString())
-      .order('start_time', { ascending: true })
+      .gte('startTime', startOfDay.toISOString())
+      .lte('startTime', endOfDay.toISOString())
+      .order('startTime', { ascending: true })
 
     if (error) {
-      console.error('Erreur lors de la récupération des analyses:', error)
+      console.error('Error fetching sessions:', error)
       return
     }
 
-    setAnalyticsData(data as SessionData[])
+    setSessions(data as TimerSession[])
   }
 
   const getTotalDuration = (type: string) => {
-    return analyticsData
+    return sessions
       .filter(session => session.type === type)
       .reduce((acc, session) => acc + session.duration, 0)
   }
@@ -171,29 +163,6 @@ const TimerPage: React.FC = () => {
     return `${hours}h ${mins}m`
   }
 
-  const weeklyData = [
-    { name: 'Lun', pomodoro: 0, deepwork: 0 },
-    { name: 'Mar', pomodoro: 0, deepwork: 0 },
-    { name: 'Mer', pomodoro: 0, deepwork: 0 },
-    { name: 'Jeu', pomodoro: 0, deepwork: 0 },
-    { name: 'Ven', pomodoro: 0, deepwork: 0 },
-    { name: 'Sam', pomodoro: 0, deepwork: 0 },
-    { name: 'Dim', pomodoro: 0, deepwork: 0 },
-  ]
-
-  analyticsData.forEach(session => {
-    const day = new Date(session.start_time).getDay()
-    const dayName = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'][day]
-    const dayData = weeklyData.find(d => d.name === dayName)
-    if (dayData) {
-      if (session.type === 'pomodoro') {
-        dayData.pomodoro += session.duration
-      } else if (session.type === 'deepwork') {
-        dayData.deepwork += session.duration
-      }
-    }
-  })
-
   return (
     <div className="container mx-auto p-4 min-h-screen bg-gray-100">
       <h1 className="text-4xl font-bold mb-8 text-center text-gray-800">Timers</h1>
@@ -210,9 +179,9 @@ const TimerPage: React.FC = () => {
                 className="text-center"
               >
                 <h2 className="text-2xl mb-4">{
-                  activeTimer === 'pomodoro' ? 'Pomodoro' :
-                  activeTimer === 'deepwork' ? 'Deepwork' :
-                  activeTimer === 'shortbreak' ? 'Pause Courte' : 'Pause Longue'
+                  activeTimer.type === 'pomodoro' ? 'Pomodoro' :
+                  activeTimer.type === 'deepwork' ? 'Deepwork' :
+                  activeTimer.type === 'shortbreak' ? 'Pause Courte' : 'Pause Longue'
                 }</h2>
                 <p className="text-6xl font-bold mb-8">
                   {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
@@ -242,18 +211,55 @@ const TimerPage: React.FC = () => {
         </Button>
       </div>
 
-      {/* Settings section remains the same */}
+      {showSettings && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          className="bg-white p-6 rounded-lg shadow-lg mb-8 overflow-hidden"
+        >
+          <h2 className="text-2xl mb-4">Paramètres</h2>
+          <Tabs defaultValue="pomodoro">
+            <TabsList className="mb-4 grid w-full grid-cols-4">
+              <TabsTrigger value="pomodoro">Pomodoro</TabsTrigger>
+              <TabsTrigger value="deepwork">Deepwork</TabsTrigger>
+              <TabsTrigger value="shortbreak">Pause Courte</TabsTrigger>
+              <TabsTrigger value="longbreak">Pause Longue</TabsTrigger>
+            </TabsList>
+            <TabsContent value="pomodoro">
+              <Slider value={[pomodoroTime]} onValueChange={(value) => setPomodoroTime(value[0])} max={60} step={1} className="mb-2" />
+              <p>Durée : {pomodoroTime} minutes</p>
+            </TabsContent>
+            <TabsContent value="deepwork">
+              <Slider value={[deepWorkTime]} onValueChange={(value) => setDeepWorkTime(value[0])} max={240} step={5} className="mb-2" />
+              <p>Durée : {deepWorkTime} minutes</p>
+            </TabsContent>
+            <TabsContent value="shortbreak">
+              <Slider value={[shortBreakTime]} onValueChange={(value) => setShortBreakTime(value[0])} max={15} step={1} className="mb-2" />
+              <p>Durée : {shortBreakTime} minutes</p>
+            </TabsContent>
+            <TabsContent value="longbreak">
+              <Slider value={[longBreakTime]} onValueChange={(value) => setLongBreakTime(value[0])} max={30} step={1} className="mb-2" />
+              <p>Durée : {longBreakTime} minutes</p>
+            </TabsContent>
+          </Tabs>
+          <div className="flex items-center justify-between mt-4">
+            <span>Démarrer automatiquement les pauses</span>
+            <Switch checked={autoStartBreaks} onCheckedChange={setAutoStartBreaks} />
+          </div>
+          <div className="flex items-center justify-between mt-4">
+            <span>Notifications sonores</span>
+            <Switch checked={soundEnabled} onCheckedChange={setSoundEnabled} />
+          </div>
+          <div className="mt-4">
+            <label htmlFor="taskName" className="block mb-2">Nom de la tâche</label>
+            <Input id="taskName" value={taskName} onChange={(e) => setTaskName(e.target.value)} placeholder="Entrez le nom de la tâche" />
+          </div>
+        </motion.div>
+      )}
 
       <div className="bg-white p-6 rounded-lg shadow-lg mb-8">
         <h2 className="text-2xl mb-4 text-center">Analyses</h2>
-        <div className="flex justify-center mb-4">
-          <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as 'day' | 'week')}>
-            <TabsList>
-              <TabsTrigger value="day">Jour</TabsTrigger>
-              <TabsTrigger value="week">Semaine</TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div>
             <h3 className="text-xl mb-2 text-center">Distribution du Temps</h3>
@@ -285,36 +291,7 @@ const TimerPage: React.FC = () => {
               </div>
             </div>
           </div>
-          <div>
-            <h3 className="text-xl mb-2 text-center">
-              {viewMode === 'day' ? 'Chronologie Journalière' : 'Aperçu Hebdomadaire'}
-            </h3>
-            {viewMode === 'day' ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={analyticsData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="start_time" tickFormatter={(time) => format(new Date(time), 'HH:mm')} />
-                  <YAxis />
-                  <Tooltip labelFormatter={(label) => format(new Date(label), 'HH:mm')} />
-                  <Legend />
-                  <Line type="monotone" dataKey="duration" stroke="#8884d8" name="Durée (minutes)" />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={weeklyData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="pomodoro" fill="#8884d8" name="Pomodoro" />
-                  <Bar dataKey="deepwork" fill="#82ca9d" name="Deepwork" />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-          <div className="flex justify-center items-center">
+          <div className="flex flex-col items-center justify-center">
             <Calendar
               mode="single"
               selected={selectedDate}
@@ -323,16 +300,16 @@ const TimerPage: React.FC = () => {
               locale={fr}
             />
           </div>
-          <div>
+          <div className="md:col-span-2">
             <h3 className="text-xl mb-2 text-center">Statistiques Rapides</h3>
-            <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg">
               <div className="bg-white p-3 rounded shadow">
                 <h4 className="font-semibold text-sm">Total Pomodoros</h4>
-                <p className="text-lg">{analyticsData.filter(s => s.type === 'pomodoro').length}</p>
+                <p className="text-lg">{sessions.filter(s => s.type === 'pomodoro').length}</p>
               </div>
               <div className="bg-white p-3 rounded shadow">
                 <h4 className="font-semibold text-sm">Total Deepwork</h4>
-                <p className="text-lg">{analyticsData.filter(s => s.type === 'deepwork').length}</p>
+                <p className="text-lg">{sessions.filter(s => s.type === 'deepwork').length}</p>
               </div>
               <div className="bg-white p-3 rounded shadow">
                 <h4 className="font-semibold text-sm">Temps Productif</h4>
@@ -345,36 +322,9 @@ const TimerPage: React.FC = () => {
             </div>
           </div>
         </div>
-        <div className="mt-8">
-      <h3 className="text-xl mb-2 text-center">Résumé des Sessions</h3>
-      <ul className="space-y-2 max-h-60 overflow-y-auto">
-        {analyticsData.map((session, index) => (
-          <li key={index} className="bg-gray-100 p-2 rounded flex justify-between items-center">
-            <span>
-              <span className="font-semibold">{format(new Date(session.start_time), 'HH:mm', { locale: fr })}</span>
-              <span className="ml-2">{
-                session.type === 'pomodoro' ? 'Pomodoro' :
-                session.type === 'deepwork' ? 'Deepwork' :
-                session.type === 'shortbreak' ? 'Pause Courte' : 'Pause Longue'
-              }</span>
-            </span>
-            <span>
-              {formatDuration(session.duration)}
-              {session.task_name && <span className="ml-2 text-gray-600">({session.task_name})</span>}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
       </div>
     </div>
   )
 }
-
-const formatDuration = (duration: number): string => {
-    const minutes = Math.floor(duration);
-    const seconds = Math.round((duration - minutes) * 60);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  }
 
 export default TimerPage
