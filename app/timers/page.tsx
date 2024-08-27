@@ -89,14 +89,12 @@ const TimerPage: React.FC = () => {
     if (activeTimer) {
       const endTime = new Date()
       const actualDuration = (endTime.getTime() - new Date(activeTimer.start_time).getTime()) / 60000 // Convert to minutes
-      const { error } = await supabase.from('sessions').update({
-        end_time: endTime.toISOString(),
-        duration: actualDuration
-      }).eq('id', activeTimer.id)
+      const updatedSession = { ...activeTimer, end_time: endTime.toISOString(), duration: actualDuration }
+      const { error } = await supabase.from('sessions').update(updatedSession).eq('id', activeTimer.id)
       if (error) console.error('Erreur lors de l\'arrêt du minuteur:', error)
       else {
-        await fetchSessions()
-        updateQuickStats()
+        setSessions(prev => [...prev.filter(s => s.id !== activeTimer.id), updatedSession])
+        updateQuickStats([...sessions.filter(s => s.id !== activeTimer.id), updatedSession])
       }
     }
     setActiveTimer(null)
@@ -142,21 +140,21 @@ const TimerPage: React.FC = () => {
     }
 
     setSessions(data as SessionData[])
-    updateQuickStats()
+    updateQuickStats(data as SessionData[])
   }
 
-  const getTotalDuration = (type: string) => {
-    return sessions
+  const getTotalDuration = (type: string, sessionsData: SessionData[]) => {
+    return sessionsData
       .filter(session => session.type === type)
       .reduce((acc, session) => acc + session.duration, 0)
   }
 
-  const updateQuickStats = () => {
+  const updateQuickStats = (sessionsData: SessionData[]) => {
     setPieChartData([
-      { name: 'Pomodoro', value: getTotalDuration('pomodoro') },
-      { name: 'Deepwork', value: getTotalDuration('deepwork') },
-      { name: 'Pause Courte', value: getTotalDuration('shortbreak') },
-      { name: 'Pause Longue', value: getTotalDuration('longbreak') },
+      { name: 'Pomodoro', value: getTotalDuration('pomodoro', sessionsData) },
+      { name: 'Deepwork', value: getTotalDuration('deepwork', sessionsData) },
+      { name: 'Pause Courte', value: getTotalDuration('shortbreak', sessionsData) },
+      { name: 'Pause Longue', value: getTotalDuration('longbreak', sessionsData) },
     ].filter(item => item.value > 0))
   }
 
@@ -293,6 +291,15 @@ const TimerPage: React.FC = () => {
             </div>
           </div>
           <div>
+            <Calendar
+              mode="single"
+              selected={selectedDate}
+              onSelect={(date) => setSelectedDate(date || new Date())}
+              className="rounded-md border shadow-md"
+              locale={fr}
+            />
+          </div>
+          <div>
             <h3 className="text-xl mb-2 text-center">Statistiques Rapides</h3>
             <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
               <div className="bg-white p-3 rounded shadow">
@@ -305,23 +312,35 @@ const TimerPage: React.FC = () => {
               </div>
               <div className="bg-white p-3 rounded shadow">
                 <h4 className="font-semibold text-sm">Temps Productif</h4>
-                <p className="text-lg">{formatTime(getTotalDuration('pomodoro') + getTotalDuration('deepwork'))}</p>
+                <p className="text-lg">{formatTime(getTotalDuration('pomodoro', sessions) + getTotalDuration('deepwork', sessions))}</p>
               </div>
               <div className="bg-white p-3 rounded shadow">
                 <h4 className="font-semibold text-sm">Temps de Pause</h4>
-                <p className="text-lg">{formatTime(getTotalDuration('shortbreak') + getTotalDuration('longbreak'))}</p>
+                <p className="text-lg">{formatTime(getTotalDuration('shortbreak', sessions) + getTotalDuration('longbreak', sessions))}</p>
               </div>
             </div>
           </div>
-        </div>
-        <div className="mt-8 flex justify-center">
-          <Calendar
-            mode="single"
-            selected={selectedDate}
-            onSelect={(date) => setSelectedDate(date || new Date())}
-            className="rounded-md border shadow-md"
-            locale={fr}
-          />
+          <div>
+            <h3 className="text-xl mb-2 text-center">Sessions du Jour</h3>
+            <ul className="space-y-2 max-h-60 overflow-y-auto">
+              {sessions.map((session, index) => (
+                <li key={index} className="bg-gray-100 p-2 rounded flex justify-between items-center">
+                  <span>
+                    <span className="font-semibold">{format(new Date(session.start_time), 'HH:mm', { locale: fr })}</span>
+                    <span className="ml-2">{
+                      session.type === 'pomodoro' ? 'Pomodoro' :
+                      session.type === 'deepwork' ? 'Deepwork' :
+                      session.type === 'shortbreak' ? 'Pause Courte' : 'Pause Longue'
+                    }</span>
+                  </span>
+                  <span>
+                    {formatTime(session.duration)}
+                    {session.task_name && <span className="ml-2 text-gray-600">({session.task_name})</span>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       </div>
     </div>
