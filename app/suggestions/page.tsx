@@ -55,24 +55,24 @@ export default function SuggestionPage() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 bg-white shadow-md rounded-lg p-6">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 bg-white shadow-lg rounded-lg p-8">
         <div>
-          <label htmlFor="name" className="block text-sm font-medium text-gray-700">Nom</label>
+          <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">Nom</label>
           <input
             type="text"
             id="name"
             {...register('name', { required: 'Le nom est requis' })}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+            className="block w-full px-4 py-2 rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
           />
           {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>}
         </div>
 
         <div>
-          <label htmlFor="category" className="block text-sm font-medium text-gray-700">Catégorie</label>
+          <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">Catégorie</label>
           <select
             id="category"
             {...register('category', { required: 'La catégorie est requise' })}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+            className="block w-full px-4 py-2 rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
           >
             <option value="">Sélectionnez une catégorie</option>
             <option value="feature">Nouvelle fonctionnalité</option>
@@ -84,12 +84,12 @@ export default function SuggestionPage() {
         </div>
 
         <div>
-          <label htmlFor="suggestion" className="block text-sm font-medium text-gray-700">Votre suggestion</label>
+          <label htmlFor="suggestion" className="block text-sm font-medium text-gray-700 mb-1">Votre suggestion</label>
           <textarea
             id="suggestion"
             rows={4}
             {...register('suggestion', { required: 'La suggestion est requise' })}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+            className="block w-full px-4 py-2 rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
           ></textarea>
           {errors.suggestion && <p className="mt-1 text-sm text-red-600">{errors.suggestion.message}</p>}
         </div>
@@ -97,7 +97,7 @@ export default function SuggestionPage() {
         <div>
           <button
             type="submit"
-            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out"
           >
             Envoyer la suggestion
           </button>
