@@ -339,7 +339,7 @@ const TimerPage = () => {
           <ul className="space-y-2">
             {analyticsData.map((session, index) => (
               <li key={index} className="bg-gray-100 p-2 rounded">
-                                <span className="font-semibold">{format(new Date(session.start_time), 'HH:mm')} - {session.type}: </span>
+                <span className="font-semibold">{format(new Date(session.start_time), 'HH:mm')} - {session.type}: </span>
                 {session.duration} minutes
                 {session.task_name && <span className="ml-2 text-gray-600">({session.task_name})</span>}
               </li>
