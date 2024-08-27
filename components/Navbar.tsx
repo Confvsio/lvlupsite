@@ -67,6 +67,7 @@ export default function Navbar() {
               title="Outils" 
               items={[
                 { href: '/timers', label: 'Timers' },
+                { href: '/journaling', label: 'Journaling' },
                 { href: '/suggestions', label: 'Suggestions' },
               ]}
             />
@@ -132,6 +133,7 @@ export default function Navbar() {
               title="Outils" 
               items={[
                 { href: '/timers', label: 'Timers' },
+                { href: '/journaling', label: 'Journaling' },
                 { href: '/suggestions', label: 'Suggestions' },
               ]}
             />
@@ -167,6 +169,7 @@ function DropdownMenu({ title, items }: { title: string, items: { href: string, 
   return (
     <div className="relative" onMouseLeave={() => setIsOpen(false)}>
       <button 
+        onClick={() => setIsOpen(!isOpen)}
         onMouseEnter={() => setIsOpen(true)}
         className="flex items-center space-x-1 text-gray-800 hover:text-indigo-600 transition duration-300 px-3 py-2 rounded-md text-sm font-medium"
       >
@@ -174,7 +177,11 @@ function DropdownMenu({ title, items }: { title: string, items: { href: string, 
         <ChevronDownIcon className="h-4 w-4" />
       </button>
       {isOpen && (
-        <div className="absolute left-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
+        <div 
+          className="absolute left-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10"
+          onMouseEnter={() => setIsOpen(true)}
+          onMouseLeave={() => setIsOpen(false)}
+        >
           {items.map((item, index) => (
             <Link 
               key={index}
