@@ -1,4 +1,6 @@
+// app/timers/page.tsx
 'use client'
+
 import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -10,6 +12,7 @@ import { useSupabaseClient } from '@supabase/auth-helpers-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts'
 import { Calendar } from "@/components/ui/calendar"
 import { format, startOfWeek, endOfWeek } from 'date-fns'
+import { fr } from 'date-fns/locale'
 import { Settings } from 'lucide-react'
 
 interface SessionData {
@@ -69,7 +72,7 @@ const TimerPage: React.FC = () => {
       duration: 0,
       task_name: taskName
     }).select()
-    if (error) console.error('Error starting timer:', error)
+    if (error) console.error('Erreur lors du démarrage du minuteur:', error)
     else fetchAnalytics()
   }
 
@@ -80,7 +83,7 @@ const TimerPage: React.FC = () => {
         end_time: new Date().toISOString(),
         duration: actualDuration
       }).eq('start_time', new Date(Date.now() - getTimerDuration(activeTimer) * 1000).toISOString())
-      if (error) console.error('Error stopping timer:', error)
+      if (error) console.error('Erreur lors de l\'arrêt du minuteur:', error)
       else fetchAnalytics()
     }
     setActiveTimer(null)
@@ -116,8 +119,8 @@ const TimerPage: React.FC = () => {
       end = new Date(selectedDate)
       end.setHours(23, 59, 59, 999)
     } else {
-      start = startOfWeek(selectedDate)
-      end = endOfWeek(selectedDate)
+      start = startOfWeek(selectedDate, { weekStartsOn: 1 })
+      end = endOfWeek(selectedDate, { weekStartsOn: 1 })
     }
 
     const { data, error } = await supabase
@@ -128,7 +131,7 @@ const TimerPage: React.FC = () => {
       .order('start_time', { ascending: true })
 
     if (error) {
-      console.error('Error fetching analytics:', error)
+      console.error('Erreur lors de la récupération des analyses:', error)
       return
     }
 
@@ -143,9 +146,9 @@ const TimerPage: React.FC = () => {
 
   const pieChartData = [
     { name: 'Pomodoro', value: getTotalDuration('pomodoro') },
-    { name: 'Deep Work', value: getTotalDuration('deepwork') },
-    { name: 'Short Break', value: getTotalDuration('shortbreak') },
-    { name: 'Long Break', value: getTotalDuration('longbreak') },
+    { name: 'Travail Profond', value: getTotalDuration('deepwork') },
+    { name: 'Pause Courte', value: getTotalDuration('shortbreak') },
+    { name: 'Pause Longue', value: getTotalDuration('longbreak') },
   ].filter(item => item.value > 0)
 
   const formatTime = (minutes: number) => {
@@ -155,18 +158,18 @@ const TimerPage: React.FC = () => {
   }
 
   const weeklyData = [
-    { name: 'Mon', pomodoro: 0, deepwork: 0 },
-    { name: 'Tue', pomodoro: 0, deepwork: 0 },
-    { name: 'Wed', pomodoro: 0, deepwork: 0 },
-    { name: 'Thu', pomodoro: 0, deepwork: 0 },
-    { name: 'Fri', pomodoro: 0, deepwork: 0 },
-    { name: 'Sat', pomodoro: 0, deepwork: 0 },
-    { name: 'Sun', pomodoro: 0, deepwork: 0 },
+    { name: 'Lun', pomodoro: 0, deepwork: 0 },
+    { name: 'Mar', pomodoro: 0, deepwork: 0 },
+    { name: 'Mer', pomodoro: 0, deepwork: 0 },
+    { name: 'Jeu', pomodoro: 0, deepwork: 0 },
+    { name: 'Ven', pomodoro: 0, deepwork: 0 },
+    { name: 'Sam', pomodoro: 0, deepwork: 0 },
+    { name: 'Dim', pomodoro: 0, deepwork: 0 },
   ]
 
   analyticsData.forEach(session => {
     const day = new Date(session.start_time).getDay()
-    const dayName = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day]
+    const dayName = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'][day]
     const dayData = weeklyData.find(d => d.name === dayName)
     if (dayData) {
       if (session.type === 'pomodoro') {
@@ -179,7 +182,7 @@ const TimerPage: React.FC = () => {
 
   return (
     <div className="container mx-auto p-4 min-h-screen bg-gray-100">
-      <h1 className="text-4xl font-bold mb-8 text-center text-gray-800">Productivity Timer</h1>
+      <h1 className="text-4xl font-bold mb-8 text-center text-gray-800">Minuteur de Productivité</h1>
       
       <div className="flex flex-col items-center mb-8">
         <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
@@ -192,11 +195,15 @@ const TimerPage: React.FC = () => {
                 exit={{ opacity: 0, scale: 0.8 }}
                 className="text-center"
               >
-                <h2 className="text-2xl mb-4">{activeTimer.charAt(0).toUpperCase() + activeTimer.slice(1)}</h2>
+                <h2 className="text-2xl mb-4">{
+                  activeTimer === 'pomodoro' ? 'Pomodoro' :
+                  activeTimer === 'deepwork' ? 'Travail Profond' :
+                  activeTimer === 'shortbreak' ? 'Pause Courte' : 'Pause Longue'
+                }</h2>
                 <p className="text-6xl font-bold mb-8">
                   {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
                 </p>
-                <Button onClick={stopTimer} className="w-full">Stop</Button>
+                <Button onClick={stopTimer} className="w-full">Arrêter</Button>
               </motion.div>
             ) : (
               <motion.div
@@ -207,9 +214,9 @@ const TimerPage: React.FC = () => {
                 className="grid grid-cols-2 gap-4"
               >
                 <Button onClick={() => startTimer('pomodoro')} className="h-24">Pomodoro<br/>{pomodoroTime}m</Button>
-                <Button onClick={() => startTimer('deepwork')} className="h-24">Deep Work<br/>{deepWorkTime}m</Button>
-                <Button onClick={() => startTimer('shortbreak')} className="h-24">Short Break<br/>{shortBreakTime}m</Button>
-                <Button onClick={() => startTimer('longbreak')} className="h-24">Long Break<br/>{longBreakTime}m</Button>
+                <Button onClick={() => startTimer('deepwork')} className="h-24">Travail Profond<br/>{deepWorkTime}m</Button>
+                <Button onClick={() => startTimer('shortbreak')} className="h-24">Pause Courte<br/>{shortBreakTime}m</Button>
+                <Button onClick={() => startTimer('longbreak')} className="h-24">Pause Longue<br/>{longBreakTime}m</Button>
               </motion.div>
             )}
           </AnimatePresence>
@@ -217,7 +224,7 @@ const TimerPage: React.FC = () => {
         
         <Button onClick={() => setShowSettings(!showSettings)} className="mt-4">
           <Settings className="mr-2" />
-          {showSettings ? 'Hide' : 'Show'} Settings
+          {showSettings ? 'Masquer' : 'Afficher'} les Paramètres
         </Button>
       </div>
 
@@ -229,144 +236,157 @@ const TimerPage: React.FC = () => {
             exit={{ opacity: 0, height: 0 }}
             className="bg-white p-6 rounded-lg shadow-lg mb-8 overflow-hidden"
           >
-            <h2 className="text-2xl mb-4">Settings</h2>
+            <h2 className="text-2xl mb-4">Paramètres</h2>
             <Tabs defaultValue="pomodoro">
               <TabsList className="mb-4 grid w-full grid-cols-4">
                 <TabsTrigger value="pomodoro">Pomodoro</TabsTrigger>
-                <TabsTrigger value="deepwork">Deep Work</TabsTrigger>
-                <TabsTrigger value="shortbreak">Short Break</TabsTrigger>
-                <TabsTrigger value="longbreak">Long Break</TabsTrigger>
+                <TabsTrigger value="deepwork">Travail Profond</TabsTrigger>
+                <TabsTrigger value="shortbreak">Pause Courte</TabsTrigger>
+                <TabsTrigger value="longbreak">Pause Longue</TabsTrigger>
               </TabsList>
               <TabsContent value="pomodoro">
                 <Slider value={[pomodoroTime]} onValueChange={(value) => setPomodoroTime(value[0])} max={60} step={1} className="mb-2" />
-                <p>Duration: {pomodoroTime} minutes</p>
+                <p>Durée : {pomodoroTime} minutes</p>
               </TabsContent>
               <TabsContent value="deepwork">
                 <Slider value={[deepWorkTime]} onValueChange={(value) => setDeepWorkTime(value[0])} max={240} step={5} className="mb-2" />
-                <p>Duration: {deepWorkTime} minutes</p>
+                <p>Durée : {deepWorkTime} minutes</p>
               </TabsContent>
               <TabsContent value="shortbreak">
                 <Slider value={[shortBreakTime]} onValueChange={(value) => setShortBreakTime(value[0])} max={15} step={1} className="mb-2" />
-                <p>Duration: {shortBreakTime} minutes</p>
+                <p>Durée : {shortBreakTime} minutes</p>
               </TabsContent>
               <TabsContent value="longbreak">
                 <Slider value={[longBreakTime]} onValueChange={(value) => setLongBreakTime(value[0])} max={30} step={1} className="mb-2" />
-                <p>Duration: {longBreakTime} minutes</p>
+                <p>Durée : {longBreakTime} minutes</p>
               </TabsContent>
             </Tabs>
             <div className="flex items-center justify-between mt-4">
-              <span>Auto-start breaks</span>
+              <span>Démarrer automatiquement les pauses</span>
               <Switch checked={autoStartBreaks} onCheckedChange={setAutoStartBreaks} />
             </div>
             <div className="flex items-center justify-between mt-4">
-              <span>Sound notifications</span>
+              <span>Notifications sonores</span>
               <Switch checked={soundEnabled} onCheckedChange={setSoundEnabled} />
             </div>
             <div className="mt-4">
-              <label htmlFor="taskName" className="block mb-2">Task Name</label>
-              <Input id="taskName" value={taskName} onChange={(e) => setTaskName(e.target.value)} placeholder="Enter task name" />
+              <label htmlFor="taskName" className="block mb-2">Nom de la tâche</label>
+              <Input id="taskName" value={taskName} onChange={(e) => setTaskName(e.target.value)} placeholder="Entrez le nom de la tâche" />
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
       <div className="bg-white p-6 rounded-lg shadow-lg mb-8">
-        <h2 className="text-2xl mb-4 text-center">Analytics</h2>
+        <h2 className="text-2xl mb-4 text-center">Analyses</h2>
         <div className="flex justify-center mb-4">
-          <Button onClick={() => setViewMode('day')} className={viewMode === 'day' ? 'bg-blue-500' : ''}>Day</Button>
-          <Button onClick={() => setViewMode('week')} className={viewMode === 'week' ? 'bg-blue-500' : ''}>Week</Button>
+          <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as 'day' | 'week')}>
+            <TabsList>
+              <TabsTrigger value="day">Jour</TabsTrigger>
+              <TabsTrigger value="week">Semaine</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div>
+                <h3 className="text-xl mb-2 text-center">Distribution du Temps</h3>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={pieChartData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={true}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                      label={({ name, percent }) => percent > 0 ? `${name} ${(percent * 100).toFixed(0)}%` : ''}
+                    >
+                      {pieChartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend layout="vertical" align="right" verticalAlign="middle" />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div>
+                <h3 className="text-xl mb-2 text-center">
+                  {viewMode === 'day' ? 'Chronologie Journalière' : 'Aperçu Hebdomadaire'}
+                </h3>
+                {viewMode === 'day' ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={analyticsData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="start_time" tickFormatter={(time) => format(new Date(time), 'HH:mm')} />
+                      <YAxis />
+                      <Tooltip labelFormatter={(label) => format(new Date(label), 'HH:mm')} />
+                      <Legend />
+                      <Line type="monotone" dataKey="duration" stroke="#8884d8" name="Durée (minutes)" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={weeklyData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="pomodoro" fill="#8884d8" name="Pomodoro" />
+                      <Bar dataKey="deepwork" fill="#82ca9d" name="Travail Profond" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+          </div>
           <div>
             <Calendar
               mode="single"
               selected={selectedDate}
               onSelect={(date) => setSelectedDate(date || new Date())}
-              className="rounded-md border"
+              className="rounded-md border mb-4"
+              locale={fr}
             />
             <div className="mt-4">
-              <h3 className="text-xl mb-2">Quick Stats</h3>
+              <h3 className="text-xl mb-2">Statistiques Rapides</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <h4 className="font-semibold">Total Pomodoros</h4>
                   <p>{analyticsData.filter(s => s.type === 'pomodoro').length}</p>
                 </div>
                 <div>
-                  <h4 className="font-semibold">Total Deep Work</h4>
+                  <h4 className="font-semibold">Total Travail Profond</h4>
                   <p>{analyticsData.filter(s => s.type === 'deepwork').length}</p>
                 </div>
                 <div>
-                  <h4 className="font-semibold">Productive Time</h4>
+                  <h4 className="font-semibold">Temps Productif</h4>
                   <p>{formatTime(getTotalDuration('pomodoro') + getTotalDuration('deepwork'))}</p>
                 </div>
                 <div>
-                  <h4 className="font-semibold">Break Time</h4>
+                  <h4 className="font-semibold">Temps de Pause</h4>
                   <p>{formatTime(getTotalDuration('shortbreak') + getTotalDuration('longbreak'))}</p>
                 </div>
               </div>
             </div>
           </div>
-          <div>
-            <h3 className="text-xl mb-2 text-center">Time Distribution</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={pieChartData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={true}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                  label={({ name, percent }) => percent > 0 ? `${name} ${(percent * 100).toFixed(0)}%` : ''}
-                >
-                  {pieChartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend layout="vertical" align="right" verticalAlign="middle" />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div>
-            <h3 className="text-xl mb-2 text-center">
-              {viewMode === 'day' ? 'Daily Timeline' : 'Weekly Overview'}
-            </h3>
-            {viewMode === 'day' ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={analyticsData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="start_time" tickFormatter={(time) => format(new Date(time), 'HH:mm')} />
-                  <YAxis />
-                  <Tooltip labelFormatter={(label) => format(new Date(label), 'HH:mm')} />
-                  <Legend />
-                  <Line type="monotone" dataKey="duration" stroke="#8884d8" name="Duration (minutes)" />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={weeklyData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="pomodoro" fill="#8884d8" name="Pomodoro" />
-                  <Bar dataKey="deepwork" fill="#82ca9d" name="Deep Work" />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
         </div>
         <div className="mt-8">
-          <h3 className="text-xl mb-2 text-center">Session Summary</h3>
+          <h3 className="text-xl mb-2 text-center">Résumé des Sessions</h3>
           <ul className="space-y-2 max-h-60 overflow-y-auto">
             {analyticsData.map((session, index) => (
               <li key={index} className="bg-gray-100 p-2 rounded flex justify-between items-center">
                 <span>
-                  <span className="font-semibold">{format(new Date(session.start_time), 'HH:mm')}</span>
-                  <span className="ml-2">{session.type.charAt(0).toUpperCase() + session.type.slice(1)}</span>
+                  <span className="font-semibold">{format(new Date(session.start_time), 'HH:mm', { locale: fr })}</span>
+                  <span className="ml-2">{
+                    session.type === 'pomodoro' ? 'Pomodoro' :
+                    session.type === 'deepwork' ? 'Travail Profond' :
+                    session.type === 'shortbreak' ? 'Pause Courte' : 'Pause Longue'
+                  }</span>
                 </span>
                 <span>
                   {session.duration.toFixed(1)} minutes
