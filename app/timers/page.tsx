@@ -13,8 +13,8 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { Calendar } from "@/components/ui/calendar"
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { Settings, Play, Pause, RotateCcw } from 'lucide-react'
-import { toast } from 'react-hot-toast'
+import { Settings, Play, Pause, RotateCcw, ChevronRight } from 'lucide-react'
+import { toast, Toaster } from 'react-hot-toast'
 
 interface TimerSession {
   id: string
@@ -239,177 +239,110 @@ const TimerPage: React.FC = () => {
   }
 
   return (
-    <div className="container mx-auto p-4 min-h-screen bg-gray-100">
+    <div className="container mx-auto p-4 min-h-screen bg-gray-50">
+      <Toaster position="top-right" />
       <h1 className="text-4xl font-bold mb-8 text-center text-gray-800">Productivity Timer</h1>
       
-      <div className="bg-white p-6 rounded-lg shadow-lg mb-8">
-        <div className="text-center mb-4">
-          <h2 className="text-2xl font-semibold">
-            {activeTimer ? activeTimer.type.charAt(0).toUpperCase() + activeTimer.type.slice(1) : 'Select a Timer'}
-          </h2>
-          <p className="text-6xl font-bold my-4">{formatTime(timeLeft)}</p>
-          {activeTimer && (
-            <p className="text-gray-600 mb-4">
-              Task: {activeTimer.task_name || 'No task specified'}
-            </p>
-          )}
-        </div>
-        <div className="flex justify-center space-x-4 mb-4">
-          {!activeTimer ? (
-            <>
-              <Button onClick={() => startTimer('pomodoro')} className="bg-red-500 hover:bg-red-600">Pomodoro</Button>
-              <Button onClick={() => startTimer('deepwork')} className="bg-blue-500 hover:bg-blue-600">Deepwork</Button>
-              <Button onClick={() => startTimer('shortbreak')} className="bg-green-500 hover:bg-green-600">Short Break</Button>
-              <Button onClick={() => startTimer('longbreak')} className="bg-yellow-500 hover:bg-yellow-600">Long Break</Button>
-            </>
-          ) : (
-            <>
-              {isRunning ? (
-                <Button onClick={pauseTimer} className="bg-yellow-500 hover:bg-yellow-600">
-                  <Pause className="mr-2 h-4 w-4" /> Pause
-                </Button>
-              ) : (
-                <Button onClick={resumeTimer} className="bg-green-500 hover:bg-green-600">
-                  <Play className="mr-2 h-4 w-4" /> Resume
-                </Button>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2">
+          <div className="bg-white p-6 rounded-lg shadow-lg mb-8">
+            <div className="text-center mb-4">
+              <h2 className="text-3xl font-semibold text-gray-700">
+                {activeTimer ? activeTimer.type.charAt(0).toUpperCase() + activeTimer.type.slice(1) : 'Select a Timer'}
+              </h2>
+              <p className="text-6xl font-bold my-4 text-indigo-600">{formatTime(timeLeft)}</p>
+              {activeTimer && (
+                <p className="text-gray-600 mb-4">
+                  Task: {activeTimer.task_name || 'No task specified'}
+                </p>
               )}
-              <Button onClick={stopTimer} className="bg-red-500 hover:bg-red-600">Stop</Button>
-              <Button onClick={resetTimer} className="bg-blue-500 hover:bg-blue-600">
-                <RotateCcw className="mr-2 h-4 w-4" /> Reset
+            </div>
+            <div className="flex justify-center space-x-4 mb-4">
+              {!activeTimer ? (
+                <>
+                  <Button onClick={() => startTimer('pomodoro')} className="bg-red-500 hover:bg-red-600">Pomodoro</Button>
+                  <Button onClick={() => startTimer('deepwork')} className="bg-blue-500 hover:bg-blue-600">Deepwork</Button>
+                  <Button onClick={() => startTimer('shortbreak')} className="bg-green-500 hover:bg-green-600">Short Break</Button>
+                  <Button onClick={() => startTimer('longbreak')} className="bg-yellow-500 hover:bg-yellow-600">Long Break</Button>
+                </>
+              ) : (
+                <>
+                  {isRunning ? (
+                    <Button onClick={pauseTimer} className="bg-yellow-500 hover:bg-yellow-600">
+                      <Pause className="mr-2 h-4 w-4" /> Pause
+                    </Button>
+                  ) : (
+                    <Button onClick={resumeTimer} className="bg-green-500 hover:bg-green-600">
+                      <Play className="mr-2 h-4 w-4" /> Resume
+                    </Button>
+                  )}
+                  <Button onClick={stopTimer} className="bg-red-500 hover:bg-red-600">Stop</Button>
+                  <Button onClick={resetTimer} className="bg-blue-500 hover:bg-blue-600">
+                    <RotateCcw className="mr-2 h-4 w-4" /> Reset
+                  </Button>
+                </>
+              )}
+            </div>
+            <div className="flex justify-center">
+              <Input
+                type="text"
+                placeholder="Enter task name"
+                value={taskName}
+                onChange={(e) => setTaskName(e.target.value)}
+                className="max-w-xs mr-2"
+              />
+              <Button onClick={() => setShowSettings(!showSettings)}>
+                <Settings className="mr-2 h-4 w-4" />
+                {showSettings ? 'Hide' : 'Show'} Settings
               </Button>
-            </>
-          )}
-        </div>
-        <div className="flex justify-center">
-          <Input
-            type="text"
-            placeholder="Enter task name"
-            value={taskName}
-            onChange={(e) => setTaskName(e.target.value)}
-            className="max-w-xs mr-2"
-          />
-          <Button onClick={() => setShowSettings(!showSettings)}>
-            <Settings className="mr-2 h-4 w-4" />
-            {showSettings ? 'Hide' : 'Show'} Settings
-          </Button>
-        </div>
-      </div>
-
-      <AnimatePresence>
-        {showSettings && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="bg-white p-6 rounded-lg shadow-lg mb-8 overflow-hidden"
-          >
-            <h2 className="text-2xl mb-4">Timer Settings</h2>
-            <Tabs defaultValue="pomodoro">
-              <TabsList className="mb-4 grid w-full grid-cols-4">
-                <TabsTrigger value="pomodoro">Pomodoro</TabsTrigger>
-                <TabsTrigger value="deepwork">Deepwork</TabsTrigger>
-                <TabsTrigger value="shortbreak">Short Break</TabsTrigger>
-                <TabsTrigger value="longbreak">Long Break</TabsTrigger>
-              </TabsList>
-              {Object.entries(timerSettings).map(([key, value]) => (
-                <TabsContent key={key} value={key}>
-                  <Slider
-                    value={[value]}
-                    onValueChange={(newValue) => setTimerSettings(prev => ({ ...prev, [key]: newValue[0] }))}
-                    max={key.includes('break') ? 30 : 120}
-                    step={1}
-                    className="mb-2"
-                  />
-                  <p>Duration: {value} minutes</p>
-                </TabsContent>
-              ))}
-            </Tabs>
-            <div className="flex items-center justify-between mt-4">
-              <span>Auto-start breaks</span>
-              <Switch checked={autoStartBreaks} onCheckedChange={setAutoStartBreaks} />
             </div>
-            <div className="flex items-center justify-between mt-4">
-              <span>Sound notifications</span>
-              <Switch checked={soundEnabled} onCheckedChange={setSoundEnabled} />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
 
-      <div className="bg-white p-6 rounded-lg shadow-lg mb-8">
-        <h2 className="text-2xl mb-4 text-center">Analytics</h2>
-        <div className="flex justify-center mb-4">
-        <Tabs value={viewMode} onValueChange={(value: string) => setViewMode(value as 'day' | 'week')}>
-  <TabsList>
-    <TabsTrigger value="day">Day</TabsTrigger>
-    <TabsTrigger value="week">Week</TabsTrigger>
-  </TabsList>
-</Tabs>
-        </div>        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div>
-            <h3 className="text-xl mb-2 text-center">Time Distribution</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={pieChartData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                >
-                  {pieChartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+          <AnimatePresence>
+            {showSettings && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="bg-white p-6 rounded-lg shadow-lg mb-8 overflow-hidden"
+              >
+                <h2 className="text-2xl mb-4 text-gray-700">Timer Settings</h2>
+                <Tabs defaultValue="pomodoro">
+                  <TabsList className="mb-4 grid w-full grid-cols-4">
+                    <TabsTrigger value="pomodoro">Pomodoro</TabsTrigger>
+                    <TabsTrigger value="deepwork">Deepwork</TabsTrigger>
+                    <TabsTrigger value="shortbreak">Short Break</TabsTrigger>
+                    <TabsTrigger value="longbreak">Long Break</TabsTrigger>
+                  </TabsList>
+                  {Object.entries(timerSettings).map(([key, value]) => (
+                    <TabsContent key={key} value={key}>
+                      <Slider
+                        value={[value]}
+                        onValueChange={(newValue) => setTimerSettings(prev => ({ ...prev, [key]: newValue[0] }))}
+                        max={key.includes('break') ? 30 : 120}
+                        step={1}
+                        className="mb-2"
+                      />
+                      <p>Duration: {value} minutes</p>
+                    </TabsContent>
                   ))}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div>
-            <h3 className="text-xl mb-2 text-center">
-              {viewMode === 'day' ? 'Daily Timeline' : 'Weekly Overview'}
-            </h3>
-            <ResponsiveContainer width="100%" height={300}>
-              {viewMode === 'day' ? (
-                <LineChart data={getChartData()}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="time" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Line type="monotone" dataKey="duration" stroke="#8884d8" name="Duration (minutes)" />
-                </LineChart>
-              ) : (
-                <LineChart data={getChartData()}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="day" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Line type="monotone" dataKey="pomodoro" stroke={COLORS[0]} name="Pomodoro" />
-                  <Line type="monotone" dataKey="deepwork" stroke={COLORS[1]} name="Deepwork" />
-                  <Line type="monotone" dataKey="shortbreak" stroke={COLORS[2]} name="Short Break" />
-                  <Line type="monotone" dataKey="longbreak" stroke={COLORS[3]} name="Long Break" />
-                </LineChart>
-              )}
-            </ResponsiveContainer>
-          </div>
-          <div>
-            <h3 className="text-xl mb-2 text-center">Date Selection</h3>
-            <Calendar
-              mode="single"
-              selected={selectedDate}
-              onSelect={(date) => setSelectedDate(date || new Date())}
-              className="rounded-md border shadow-md"
-              locale={fr}
-            />
-          </div>
-          <div>
-            <h3 className="text-xl mb-2 text-center">Quick Stats</h3>
+                </Tabs>
+                <div className="flex items-center justify-between mt-4">
+                  <span>Auto-start breaks</span>
+                  <Switch checked={autoStartBreaks} onCheckedChange={setAutoStartBreaks} />
+                </div>
+                <div className="flex items-center justify-between mt-4">
+                  <span>Sound notifications</span>
+                  <Switch checked={soundEnabled} onCheckedChange={setSoundEnabled} />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        <div className="lg:col-span-1">
+          <div className="bg-white p-6 rounded-lg shadow-lg mb-8">
+          <h2 className="text-2xl mb-4 text-center text-gray-700">Quick Stats</h2>
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-gray-100 p-4 rounded-lg">
                 <h4 className="font-semibold">Total Pomodoros</h4>
@@ -421,11 +354,66 @@ const TimerPage: React.FC = () => {
               </div>
               <div className="bg-gray-100 p-4 rounded-lg">
                 <h4 className="font-semibold">Productive Time</h4>
-                <p className="text-2xl">{formatTime((getTotalDuration('pomodoro') + getTotalDuration('deepwork')) * 60)}</p>
+                <p className="text-2xl">{formatTime(getTotalDuration('pomodoro') + getTotalDuration('deepwork'))}</p>
               </div>
               <div className="bg-gray-100 p-4 rounded-lg">
                 <h4 className="font-semibold">Break Time</h4>
-                <p className="text-2xl">{formatTime((getTotalDuration('shortbreak') + getTotalDuration('longbreak')) * 60)}</p>
+                <p className="text-2xl">{formatTime(getTotalDuration('shortbreak') + getTotalDuration('longbreak'))}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-lg shadow-lg mb-8">
+            <h2 className="text-2xl mb-4 text-center text-gray-700">Analytics</h2>
+            <div className="flex justify-center mb-4">
+              <Tabs value={viewMode} onValueChange={(value: string) => setViewMode(value as 'day' | 'week')}>
+                <TabsList>
+                  <TabsTrigger value="day">Day</TabsTrigger>
+                  <TabsTrigger value="week">Week</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div>
+                <h3 className="text-xl mb-2 text-center">Time Distribution</h3>
+                <ResponsiveContainer width="100%" height={200}>
+                  <PieChart>
+                    <Pie
+                      data={pieChartData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {pieChartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="mt-4 flex flex-wrap justify-center">
+                  {pieChartData.map((entry, index) => (
+                    <div key={index} className="flex items-center mr-4 mb-2">
+                      <div className="w-4 h-4 mr-2" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
+                      <span>{entry.name}: {((entry.value / pieChartData.reduce((acc, curr) => acc + curr.value, 0)) * 100).toFixed(1)}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <h3 className="text-xl mb-2 text-center">Daily Timeline</h3>
+                <ResponsiveContainer width="100%" height={200}>
+                  <LineChart data={getChartData()}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="time" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="duration" stroke="#8884d8" name="Duration (minutes)" />
+                  </LineChart>
+                </ResponsiveContainer>
               </div>
             </div>
           </div>
