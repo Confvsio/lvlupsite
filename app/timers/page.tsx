@@ -3,13 +3,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react'
-import debounce from 'lodash/debounce'
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts'
+import debounce from 'lodash/debounce'
 
 type TimerType = 'pomodoro' | 'deepWork'
 type TimerState = 'idle' | 'running' | 'paused' | 'break'
@@ -33,35 +33,6 @@ export default function TimersPage() {
 
   const user = useUser()
   const supabase = useSupabaseClient()
-
-  useEffect(() => {
-    if (user) {
-      fetchUserData()
-    }
-  }, [user])
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null
-    if (timerState === 'running') {
-      interval = setInterval(() => {
-        setTimeLeft((prevTime) => {
-          if (prevTime <= 1) {
-            clearInterval(interval!)
-            handleTimerComplete()
-            return 0
-          }
-          return prevTime - 1
-        })
-      }, 1000)
-    }
-    return () => {
-      if (interval) clearInterval(interval)
-    }
-  }, [timerState])
-
-  useEffect(() => {
-    resetTimer()
-  }, [pomoDuration, deepWorkDuration, timerType])
 
   const fetchUserData = async () => {
     const { data, error } = await supabase
@@ -112,6 +83,46 @@ export default function TimersPage() {
     }
   }, [user, pomoDuration, deepWorkDuration, pomoShortBreak, pomoLongBreak, deepWorkBreak, autoBreak, soundEnabled, dailySessions, weeklySessions, totalFocusTime, longestStreak, weeklyData, supabase])
 
+  const debouncedUpdateUserData = useCallback(
+    debounce(() => {
+      updateUserData()
+    }, 500),
+    [updateUserData]
+  )
+
+  useEffect(() => {
+    if (user) {
+      fetchUserData()
+    }
+  }, [user])
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null
+    if (timerState === 'running') {
+      interval = setInterval(() => {
+        setTimeLeft((prevTime) => {
+          if (prevTime <= 1) {
+            clearInterval(interval!)
+            handleTimerComplete()
+            return 0
+          }
+          return prevTime - 1
+        })
+      }, 1000)
+    }
+    return () => {
+      if (interval) clearInterval(interval)
+    }
+  }, [timerState])
+
+  useEffect(() => {
+    resetTimer()
+  }, [pomoDuration, deepWorkDuration, timerType])
+
+  useEffect(() => {
+    debouncedUpdateUserData()
+  }, [pomoDuration, deepWorkDuration, pomoShortBreak, pomoLongBreak, deepWorkBreak, autoBreak, soundEnabled, dailySessions, weeklySessions, totalFocusTime, longestStreak, weeklyData])
+
   const handleTimerComplete = useCallback(() => {
     if (soundEnabled) {
       playNotificationSound()
@@ -153,15 +164,25 @@ export default function TimersPage() {
     if (todayIndex !== -1) {
       updatedWeeklyData[todayIndex] = {
         ...updatedWeeklyData[todayIndex],
-        [timerType]: (updatedWeeklyData[todayIndex][timerType] || 0) + 1
+        [timerType]: (updatedWeeklyData[todayIndex][timerType] || 0) + 1,
+        productivity: calculateProductivity(updatedWeeklyData[todayIndex])
       }
     } else {
-      updatedWeeklyData.push({ date: today, [timerType]: 1 })
+      updatedWeeklyData.push({ 
+        date: today, 
+        [timerType]: 1,
+        productivity: calculateProductivity({ [timerType]: 1 })
+      })
     }
     setWeeklyData(updatedWeeklyData)
 
     updateUserData()
   }, [dailySessions, weeklySessions, totalFocusTime, longestStreak, timerType, pomoDuration, deepWorkDuration, weeklyData, updateUserData])
+
+  const calculateProductivity = (dayData: any) => {
+    const totalSessions = (dayData.pomodoro || 0) + (dayData.deepWork || 0)
+    return totalSessions > 0 ? Math.min(totalSessions * 10, 100) : 0
+  }
 
   const playNotificationSound = () => {
     const audio = new Audio('/notification.mp3')
@@ -201,208 +222,235 @@ export default function TimersPage() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
 
-  const debouncedUpdateUserData = useCallback(
-    debounce(() => {
-      updateUserData()
-    }, 500),
-    [updateUserData]
-  )
-
-  useEffect(() => {
-    debouncedUpdateUserData()
-  }, [pomoDuration, deepWorkDuration, pomoShortBreak, pomoLongBreak, deepWorkBreak, autoBreak, soundEnabled, dailySessions, weeklySessions, totalFocusTime, longestStreak, weeklyData])
-
   return (
-    <div className="container mx-auto p-4 max-w-4xl">
-      <h1 className="text-4xl font-bold mb-8 text-center text-gray-800">Minuteries de Productivité</h1>
+    <div className="container mx-auto p-8 max-w-6xl">
+      <h1 className="text-5xl font-bold mb-12 text-center text-gray-800">Minuteries de Productivité</h1>
 
-      <Tabs defaultValue="pomodoro" className="mb-8">
-        <TabsList className="grid w-full grid-cols-2 mb-4">
-          <TabsTrigger value="pomodoro">Pomodoro</TabsTrigger>
-          <TabsTrigger value="deepWork">Deep Work</TabsTrigger>
-        </TabsList>
-        <TabsContent value="pomodoro">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-2xl">Minuterie Pomodoro</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <motion.div
-                className="text-8xl font-bold text-center mb-8"
-                key={timeLeft}
-                initial={{ scale: 1.2, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ duration: 0.3 }}
-              >
-                {formatTime(timeLeft)}
-              </motion.div>
-              <div className="flex justify-center space-x-4 mb-4">
-                {timerState === 'idle' && (
-                  <Button onClick={startTimer} size="lg">Démarrer</Button>
-                )}
-                {timerState === 'running' && (
-                  <Button onClick={pauseTimer} size="lg">Pause</Button>
-                )}
-                {timerState === 'paused' && (
-                  <Button onClick={resumeTimer} size="lg">Reprendre</Button>
-                )}
-                {timerState !== 'idle' && (
-                  <Button onClick={resetTimer} variant="outline" size="lg">Réinitialiser</Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="deepWork">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-2xl">Minuterie Deep Work</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <motion.div
-                className="text-8xl font-bold text-center mb-8"
-                key={timeLeft}
-                initial={{ scale: 1.2, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ duration: 0.3 }}
-              >
-                {formatTime(timeLeft)}
-              </motion.div>
-              <div className="flex justify-center space-x-4 mb-4">
-                {timerState === 'idle' && (
-                  <Button onClick={startTimer} size="lg">Démarrer</Button>
-                )}
-                {timerState === 'running' && (
-                  <Button onClick={pauseTimer} size="lg">Pause</Button>
-                )}
-                {timerState === 'paused' && (
-                  <Button onClick={resumeTimer} size="lg">Reprendre</Button>
-                )}
-                {timerState !== 'idle' && (
-                  <Button onClick={resetTimer} variant="outline" size="lg">Réinitialiser</Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+        <Card className="shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-3xl">Pomodoro</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <motion.div
+              className="text-8xl font-bold text-center mb-8"
+              key={timerType === 'pomodoro' ? timeLeft : 'pomo'}
+              initial={{ scale: 1.2, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.3 }}
+            >
+              {timerType === 'pomodoro' && formatTime(timeLeft)}
+            </motion.div>
+            <div className="flex justify-center space-x-4">
+              {timerState === 'idle' && timerType === 'pomodoro' && (
+                <Button onClick={startTimer} size="lg" className="w-32">Démarrer</Button>
+              )}
+              {timerState === 'running' && timerType === 'pomodoro' && (
+                <Button onClick={pauseTimer} size="lg" className="w-32">Pause</Button>
+              )}
+              {timerState === 'paused' && timerType === 'pomodoro' && (
+                <Button onClick={resumeTimer} size="lg" className="w-32">Reprendre</Button>
+              )}
+              {timerState !== 'idle' && timerType === 'pomodoro' && (
+                <Button onClick={resetTimer} variant="outline" size="lg" className="w-32">Réinitialiser</Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
-      <Card className="mb-8">
+        <Card className="shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-3xl">Deep Work</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <motion.div
+              className="text-8xl font-bold text-center mb-8"
+              key={timerType === 'deepWork' ? timeLeft : 'deep'}
+              initial={{ scale: 1.2, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.3 }}
+            >
+              {timerType === 'deepWork' && formatTime(timeLeft)}
+            </motion.div>
+            <div className="flex justify-center space-x-4">
+              {timerState === 'idle' && timerType === 'deepWork' && (
+                <Button onClick={startTimer} size="lg" className="w-32">Démarrer</Button>
+              )}
+              {timerState === 'running' && timerType === 'deepWork' && (
+                <Button onClick={pauseTimer} size="lg" className="w-32">Pause</Button>
+              )}
+              {timerState === 'paused' && timerType === 'deepWork' && (
+                <Button onClick={resumeTimer} size="lg" className="w-32">Reprendre</Button>
+              )}
+              {timerState !== 'idle' && timerType === 'deepWork' && (
+                <Button onClick={resetTimer} variant="outline" size="lg" className="w-32">Réinitialiser</Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="shadow-lg mb-12">
         <CardHeader>
-          <CardTitle className="text-2xl">Paramètres</CardTitle>
+          <CardTitle className="text-3xl">Paramètres</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-6">
-            <div>
-              <label className="block mb-2">Durée Pomodoro: {pomoDuration} minutes</label>
-              <Slider
-                value={[pomoDuration]}
-                onValueChange={(value) => setPomoDuration(value[0])}
-                max={60}
-                step={1}
-              />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-6">
+              <div>
+                <label className="block mb-2 text-lg">Durée Pomodoro: {pomoDuration} minutes</label>
+                <Slider
+                  value={[pomoDuration]}
+                  onValueChange={(value) => setPomoDuration(value[0])}
+                  max={60}
+                  step={1}
+                />
+              </div>
+              <div>
+                <label className="block mb-2 text-lg">Pause courte Pomodoro: {pomoShortBreak} minutes</label>
+                <Slider
+                  value={[pomoShortBreak]}
+                  onValueChange={(value) => setPomoShortBreak(value[0])}
+                  max={15}
+                  step={1}
+                />
+              </div>
+              <div>
+                <label className="block mb-2 text-lg">Pause longue Pomodoro: {pomoLongBreak} minutes</label>
+                <Slider
+                  value={[pomoLongBreak]}
+                  onValueChange={(value) => setPomoLongBreak(value[0])}
+                  max={30}
+                  step={1}
+                />
+              </div>
             </div>
-            <div>
-              <label className="block mb-2">Durée pause courte Pomodoro: {pomoShortBreak} minutes</label>
-              <Slider
-                value={[pomoShortBreak]}
-                onValueChange={(value) => setPomoShortBreak(value[0])}
-                max={15}
-                step={1}
-              />
-            </div>
-            <div>
-              <label className="block mb-2">Durée pause longue Pomodoro: {pomoLongBreak} minutes</label>
-              <Slider
-                value={[pomoLongBreak]}
-                onValueChange={(value) => setPomoLongBreak(value[0])}
-                max={30}
-                step={1}
-              />
-            </div>
-            <div>
-              <label className="block mb-2">Durée Deep Work: {deepWorkDuration} minutes</label>
-              <Slider
-                value={[deepWorkDuration]}
-                onValueChange={(value) => setDeepWorkDuration(value[0])}
-                max={180}
-                step={5}
-              />
-            </div>
-            <div>
-              <label className="block mb-2">Durée pause Deep Work: {deepWorkBreak} minutes</label>
-              <Slider
-                value={[deepWorkBreak]}
-                onValueChange={(value) => setDeepWorkBreak(value[0])}
-                max={30}
-                step={1}
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <span>Pause automatique</span>
-              <Switch
-                checked={autoBreak}
-                onCheckedChange={setAutoBreak}
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <span>Son de notification</span>
-              <Switch
-                checked={soundEnabled}
-                onCheckedChange={setSoundEnabled}
-              />
+            <div className="space-y-6">
+              <div>
+              <label className="block mb-2 text-lg">Durée Deep Work: {deepWorkDuration} minutes</label>
+                <Slider
+                  value={[deepWorkDuration]}
+                  onValueChange={(value) => setDeepWorkDuration(value[0])}
+                  max={180}
+                  step={5}
+                />
+              </div>
+              <div>
+                <label className="block mb-2 text-lg">Pause Deep Work: {deepWorkBreak} minutes</label>
+                <Slider
+                  value={[deepWorkBreak]}
+                  onValueChange={(value) => setDeepWorkBreak(value[0])}
+                  max={30}
+                  step={1}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-lg">Pause automatique</span>
+                <Switch
+                  checked={autoBreak}
+                  onCheckedChange={setAutoBreak}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-lg">Son de notification</span>
+                <Switch
+                  checked={soundEnabled}
+                  onCheckedChange={setSoundEnabled}
+                />
+              </div>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      <Card className="mb-8">
+      <Card className="shadow-lg mb-12">
         <CardHeader>
-          <CardTitle className="text-2xl">Statistiques</CardTitle>
+          <CardTitle className="text-3xl">Statistiques</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             <div>
-            <p className="font-semibold">Sessions aujourd'hui</p>
-              <p className="text-2xl">Pomodoro: {dailySessions.pomodoro}</p>
-              <p className="text-2xl">Deep Work: {dailySessions.deepWork}</p>
+              <p className="text-lg font-semibold mb-2">Sessions aujourd'hui</p>
+              <p className="text-3xl">Pomodoro: {dailySessions.pomodoro}</p>
+              <p className="text-3xl">Deep Work: {dailySessions.deepWork}</p>
             </div>
             <div>
-              <p className="font-semibold">Sessions cette semaine</p>
-              <p className="text-2xl">Pomodoro: {weeklySessions.pomodoro}</p>
-              <p className="text-2xl">Deep Work: {weeklySessions.deepWork}</p>
+              <p className="text-lg font-semibold mb-2">Sessions cette semaine</p>
+              <p className="text-3xl">Pomodoro: {weeklySessions.pomodoro}</p>
+              <p className="text-3xl">Deep Work: {weeklySessions.deepWork}</p>
             </div>
             <div>
-              <p className="font-semibold">Temps total de concentration</p>
-              <p className="text-2xl">Pomodoro: {Math.floor(totalFocusTime.pomodoro / 60)}h</p>
-              <p className="text-2xl">Deep Work: {Math.floor(totalFocusTime.deepWork / 60)}h</p>
+              <p className="text-lg font-semibold mb-2">Temps total de concentration</p>
+              <p className="text-3xl">Pomodoro: {Math.floor(totalFocusTime.pomodoro / 60)}h {totalFocusTime.pomodoro % 60}m</p>
+              <p className="text-3xl">Deep Work: {Math.floor(totalFocusTime.deepWork / 60)}h {totalFocusTime.deepWork % 60}m</p>
             </div>
             <div>
-              <p className="font-semibold">Plus longue série</p>
-              <p className="text-2xl">Pomodoro: {longestStreak.pomodoro}</p>
-              <p className="text-2xl">Deep Work: {longestStreak.deepWork}</p>
+              <p className="text-lg font-semibold mb-2">Plus longue série</p>
+              <p className="text-3xl">Pomodoro: {longestStreak.pomodoro}</p>
+              <p className="text-3xl">Deep Work: {longestStreak.deepWork}</p>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="shadow-lg">
         <CardHeader>
-          <CardTitle className="text-2xl">Analyses hebdomadaires</CardTitle>
+          <CardTitle className="text-3xl">Analyses</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-80 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={weeklyData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
-                <Tooltip />
-                <Line type="monotone" dataKey="pomodoro" stroke="#ef4444" name="Pomodoro" />
-                <Line type="monotone" dataKey="deepWork" stroke="#3b82f6" name="Deep Work" />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          <Tabs defaultValue="weekly">
+            <TabsList className="mb-4">
+              <TabsTrigger value="weekly">Hebdomadaire</TabsTrigger>
+              <TabsTrigger value="distribution">Distribution</TabsTrigger>
+              <TabsTrigger value="productivity">Productivité</TabsTrigger>
+            </TabsList>
+            <TabsContent value="weekly">
+              <div className="h-80 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={weeklyData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="pomodoro" stroke="#ef4444" name="Pomodoro" />
+                    <Line type="monotone" dataKey="deepWork" stroke="#3b82f6" name="Deep Work" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </TabsContent>
+            <TabsContent value="distribution">
+              <div className="h-80 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={[
+                    { name: 'Pomodoro', value: totalFocusTime.pomodoro },
+                    { name: 'Deep Work', value: totalFocusTime.deepWork },
+                  ]}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="value" fill="#8884d8" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </TabsContent>
+            <TabsContent value="productivity">
+              <div className="h-80 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={weeklyData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="productivity" stroke="#10b981" name="Productivité" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
     </div>
