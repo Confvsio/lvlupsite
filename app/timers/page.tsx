@@ -1,15 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import { gsap } from 'gsap'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react'
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Cog6ToothIcon } from '@heroicons/react/24/outline'
 
 type TimerType = 'pomodoro' | 'deepWork'
 type TimerState = 'idle' | 'running' | 'paused' | 'break'
@@ -23,9 +22,12 @@ export default function TimersPage() {
   const [shortBreakDuration, setShortBreakDuration] = useState(5)
   const [longBreakDuration, setLongBreakDuration] = useState(15)
   const [autoBreak, setAutoBreak] = useState(false)
-  const [notificationSound, setNotificationSound] = useState('notification.mp3')
+  const [soundEnabled, setSoundEnabled] = useState(true)
   const [dailySessions, setDailySessions] = useState(0)
   const [weeklySessions, setWeeklySessions] = useState(0)
+  const [totalFocusTime, setTotalFocusTime] = useState(0)
+  const [longestStreak, setLongestStreak] = useState(0)
+  const [showSettings, setShowSettings] = useState(false)
 
   const user = useUser()
   const supabase = useSupabaseClient()
@@ -55,6 +57,10 @@ export default function TimersPage() {
     }
   }, [timerState])
 
+  useEffect(() => {
+    resetTimer()
+  }, [pomoDuration, deepWorkDuration])
+
   const fetchUserData = async () => {
     const { data, error } = await supabase
       .from('user_timer_data')
@@ -70,9 +76,11 @@ export default function TimersPage() {
       setShortBreakDuration(data.short_break_duration)
       setLongBreakDuration(data.long_break_duration)
       setAutoBreak(data.auto_break)
-      setNotificationSound(data.notification_sound)
+      setSoundEnabled(data.sound_enabled)
       setDailySessions(data.daily_sessions)
       setWeeklySessions(data.weekly_sessions)
+      setTotalFocusTime(data.total_focus_time)
+      setLongestStreak(data.longest_streak)
     }
   }
 
@@ -86,9 +94,11 @@ export default function TimersPage() {
         short_break_duration: shortBreakDuration,
         long_break_duration: longBreakDuration,
         auto_break: autoBreak,
-        notification_sound: notificationSound,
+        sound_enabled: soundEnabled,
         daily_sessions: dailySessions,
         weekly_sessions: weeklySessions,
+        total_focus_time: totalFocusTime,
+        longest_streak: longestStreak,
       })
 
     if (error) {
@@ -97,7 +107,9 @@ export default function TimersPage() {
   }
 
   const handleTimerComplete = () => {
-    playNotificationSound()
+    if (soundEnabled) {
+      playNotificationSound()
+    }
     if (autoBreak) {
       startBreak()
     } else {
@@ -109,17 +121,19 @@ export default function TimersPage() {
   const updateSessionCount = () => {
     setDailySessions((prev) => prev + 1)
     setWeeklySessions((prev) => prev + 1)
+    setTotalFocusTime((prev) => prev + (timerType === 'pomodoro' ? pomoDuration : deepWorkDuration))
+    setLongestStreak((prev) => Math.max(prev, dailySessions + 1))
     updateUserData()
   }
 
   const playNotificationSound = () => {
-    const audio = new Audio(notificationSound)
+    const audio = new Audio('/notification.mp3')
     audio.play()
   }
 
   const startTimer = () => {
     setTimerState('running')
-    setTimeLeft(timerType === 'pomodoro' ? pomoDuration * 60 : deepWorkDuration * 60)
+    resetTimer()
   }
 
   const pauseTimer = () => {
@@ -147,7 +161,7 @@ export default function TimersPage() {
   }
 
   return (
-    <div className="container mx-auto p-4">
+    <div className="container mx-auto p-4 max-w-4xl">
       <h1 className="text-3xl font-bold mb-8 text-center">Minuteries de Productivité</h1>
 
       <Tabs defaultValue="pomodoro" className="mb-8">
@@ -159,30 +173,29 @@ export default function TimersPage() {
           <Card>
             <CardHeader>
               <CardTitle>Minuterie Pomodoro</CardTitle>
-              <CardDescription>Concentrez-vous pendant 25 minutes, puis faites une courte pause.</CardDescription>
             </CardHeader>
             <CardContent>
               <motion.div
-                className="text-6xl font-bold text-center mb-4"
+                className="text-8xl font-bold text-center mb-8"
                 key={timeLeft}
-                initial={{ scale: 1.2 }}
-                animate={{ scale: 1 }}
+                initial={{ scale: 1.2, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
                 transition={{ duration: 0.3 }}
               >
                 {formatTime(timeLeft)}
               </motion.div>
               <div className="flex justify-center space-x-4 mb-4">
                 {timerState === 'idle' && (
-                  <Button onClick={startTimer}>Démarrer</Button>
+                  <Button onClick={startTimer} size="lg">Démarrer</Button>
                 )}
                 {timerState === 'running' && (
-                  <Button onClick={pauseTimer}>Pause</Button>
+                  <Button onClick={pauseTimer} size="lg">Pause</Button>
                 )}
                 {timerState === 'paused' && (
-                  <Button onClick={resumeTimer}>Reprendre</Button>
+                  <Button onClick={resumeTimer} size="lg">Reprendre</Button>
                 )}
                 {timerState !== 'idle' && (
-                  <Button onClick={resetTimer} variant="outline">Réinitialiser</Button>
+                  <Button onClick={resetTimer} variant="outline" size="lg">Réinitialiser</Button>
                 )}
               </div>
             </CardContent>
@@ -192,30 +205,29 @@ export default function TimersPage() {
           <Card>
             <CardHeader>
               <CardTitle>Minuterie Deep Work</CardTitle>
-              <CardDescription>Concentrez-vous pendant une longue période sans interruption.</CardDescription>
             </CardHeader>
             <CardContent>
               <motion.div
-                className="text-6xl font-bold text-center mb-4"
+                className="text-8xl font-bold text-center mb-8"
                 key={timeLeft}
-                initial={{ scale: 1.2 }}
-                animate={{ scale: 1 }}
+                initial={{ scale: 1.2, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
                 transition={{ duration: 0.3 }}
               >
                 {formatTime(timeLeft)}
               </motion.div>
               <div className="flex justify-center space-x-4 mb-4">
                 {timerState === 'idle' && (
-                  <Button onClick={startTimer}>Démarrer</Button>
+                  <Button onClick={startTimer} size="lg">Démarrer</Button>
                 )}
                 {timerState === 'running' && (
-                  <Button onClick={pauseTimer}>Pause</Button>
+                  <Button onClick={pauseTimer} size="lg">Pause</Button>
                 )}
                 {timerState === 'paused' && (
-                  <Button onClick={resumeTimer}>Reprendre</Button>
+                  <Button onClick={resumeTimer} size="lg">Reprendre</Button>
                 )}
                 {timerState !== 'idle' && (
-                  <Button onClick={resetTimer} variant="outline">Réinitialiser</Button>
+                  <Button onClick={resetTimer} variant="outline" size="lg">Réinitialiser</Button>
                 )}
               </div>
             </CardContent>
@@ -225,79 +237,10 @@ export default function TimersPage() {
 
       <Card className="mb-8">
         <CardHeader>
-          <CardTitle>Paramètres</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div>
-              <label className="block mb-2">Durée Pomodoro (minutes)</label>
-              <Slider
-                value={[pomoDuration]}
-                onValueChange={(value) => setPomoDuration(value[0])}
-                max={60}
-                step={1}
-              />
-            </div>
-            <div>
-              <label className="block mb-2">Durée Deep Work (minutes)</label>
-              <Slider
-                value={[deepWorkDuration]}
-                onValueChange={(value) => setDeepWorkDuration(value[0])}
-                max={180}
-                step={5}
-              />
-            </div>
-            <div>
-              <label className="block mb-2">Durée pause courte (minutes)</label>
-              <Slider
-                value={[shortBreakDuration]}
-                onValueChange={(value) => setShortBreakDuration(value[0])}
-                max={15}
-                step={1}
-              />
-            </div>
-            <div>
-              <label className="block mb-2">Durée pause longue (minutes)</label>
-              <Slider
-                value={[longBreakDuration]}
-                onValueChange={(value) => setLongBreakDuration(value[0])}
-                max={30}
-                step={1}
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <span>Pause automatique</span>
-              <Switch
-                checked={autoBreak}
-                onCheckedChange={setAutoBreak}
-              />
-            </div>
-            <div>
-              <label className="block mb-2">Son de notification</label>
-              <Select value={notificationSound} onValueChange={setNotificationSound}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choisir un son" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="notification.mp3">Son par défaut</SelectItem>
-                  <SelectItem value="bell.mp3">Cloche</SelectItem>
-                  <SelectItem value="chime.mp3">Carillon</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-        <CardFooter>
-          <Button onClick={updateUserData}>Sauvegarder les paramètres</Button>
-        </CardFooter>
-      </Card>
-
-      <Card>
-        <CardHeader>
           <CardTitle>Statistiques</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
               <p className="font-semibold">Sessions aujourd'hui</p>
               <p className="text-2xl">{dailySessions}</p>
@@ -306,9 +249,95 @@ export default function TimersPage() {
               <p className="font-semibold">Sessions cette semaine</p>
               <p className="text-2xl">{weeklySessions}</p>
             </div>
+            <div>
+              <p className="font-semibold">Temps total de concentration</p>
+              <p className="text-2xl">{Math.floor(totalFocusTime / 60)} heures</p>
+            </div>
+            <div>
+              <p className="font-semibold">Plus longue série</p>
+              <p className="text-2xl">{longestStreak} sessions</p>
+            </div>
           </div>
         </CardContent>
       </Card>
+
+      <div className="flex justify-center mb-8">
+        <Button onClick={() => setShowSettings(!showSettings)} variant="outline">
+          <Cog6ToothIcon className="h-5 w-5 mr-2" />
+          {showSettings ? 'Cacher les paramètres' : 'Afficher les paramètres'}
+        </Button>
+      </div>
+
+      <AnimatePresence>
+        {showSettings && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <Card className="mb-8">
+              <CardHeader>
+                <CardTitle>Paramètres</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-6">
+                  <div>
+                    <label className="block mb-2">Durée Pomodoro (minutes)</label>
+                    <Slider
+                      value={[pomoDuration]}
+                      onValueChange={(value) => setPomoDuration(value[0])}
+                      max={60}
+                      step={1}
+                    />
+                  </div>
+                  <div>
+                    <label className="block mb-2">Durée Deep Work (minutes)</label>
+                    <Slider
+                      value={[deepWorkDuration]}
+                      onValueChange={(value) => setDeepWorkDuration(value[0])}
+                      max={180}
+                      step={5}
+                    />
+                  </div>
+                  <div>
+                    <label className="block mb-2">Durée pause courte (minutes)</label>
+                    <Slider
+                      value={[shortBreakDuration]}
+                      onValueChange={(value) => setShortBreakDuration(value[0])}
+                      max={15}
+                      step={1}
+                    />
+                  </div>
+                  <div>
+                    <label className="block mb-2">Durée pause longue (minutes)</label>
+                    <Slider
+                      value={[longBreakDuration]}
+                      onValueChange={(value) => setLongBreakDuration(value[0])}
+                      max={30}
+                      step={1}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Pause automatique</span>
+                    <Switch
+                      checked={autoBreak}
+                      onCheckedChange={setAutoBreak}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Son de notification</span>
+                    <Switch
+                      checked={soundEnabled}
+                      onCheckedChange={setSoundEnabled}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
