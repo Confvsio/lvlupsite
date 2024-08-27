@@ -134,7 +134,7 @@ function DropdownMenu({ title, items }: { title: string, items: { href: string, 
 
   return (
     <div 
-      className="relative" 
+      className="relative inline-block text-left"
       onMouseEnter={() => setIsOpen(true)}
       onMouseLeave={() => setIsOpen(false)}
     >
@@ -146,7 +146,8 @@ function DropdownMenu({ title, items }: { title: string, items: { href: string, 
       </button>
       {isOpen && (
         <div 
-          className="absolute left-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10"
+          className="absolute left-0 w-48 bg-white rounded-md shadow-lg py-1 z-10"
+          style={{ top: 'calc(100% - 0.25rem)' }} // Reduce the gap
         >
           {items.map((item, index) => (
             item.onClick ? (
