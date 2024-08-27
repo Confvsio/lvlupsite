@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input"
 import { useSupabaseClient } from '@supabase/auth-helpers-react'
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
 import { Calendar } from "@/components/ui/calendar"
-import { format, startOfWeek, endOfWeek } from 'date-fns'
+import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { Settings } from 'lucide-react'
 
@@ -39,10 +39,10 @@ const TimerPage: React.FC = () => {
   const [sessions, setSessions] = useState<SessionData[]>([])
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const [showSettings, setShowSettings] = useState(false)
-  const [viewMode, setViewMode] = useState<'day' | 'week'>('day')
+  const [pieChartData, setPieChartData] = useState<{ name: string; value: number }[]>([])
+  const [lastTickTime, setLastTickTime] = useState<number>(Date.now())
   const supabase = useSupabaseClient()
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     audioRef.current = new Audio('/notification.mp3')
@@ -51,23 +51,23 @@ const TimerPage: React.FC = () => {
 
   useEffect(() => {
     if (activeTimer && timeLeft > 0) {
-      intervalRef.current = setInterval(() => {
-        setTimeLeft(prev => prev - 1)
-      }, 1000)
+      const tickTimer = () => {
+        const now = Date.now()
+        const delta = now - lastTickTime
+        setLastTickTime(now)
+        setTimeLeft(prevTime => Math.max(0, prevTime - Math.round(delta / 1000)))
+      }
+
+      const timerInterval = setInterval(tickTimer, 1000)
+      return () => clearInterval(timerInterval)
     } else if (activeTimer && timeLeft === 0) {
       handleTimerComplete()
     }
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-      }
-    }
-  }, [activeTimer, timeLeft])
+  }, [activeTimer, timeLeft, lastTickTime])
 
   useEffect(() => {
     fetchSessions()
-  }, [selectedDate, viewMode])
+  }, [selectedDate])
 
   const startTimer = async (type: 'pomodoro' | 'deepwork' | 'shortbreak' | 'longbreak') => {
     const duration = getTimerDuration(type)
@@ -80,6 +80,7 @@ const TimerPage: React.FC = () => {
     }
     setActiveTimer(newSession)
     setTimeLeft(duration)
+    setLastTickTime(Date.now())
     const { error } = await supabase.from('sessions').insert(newSession)
     if (error) console.error('Erreur lors du démarrage du minuteur:', error)
   }
@@ -93,13 +94,13 @@ const TimerPage: React.FC = () => {
         duration: actualDuration
       }).eq('id', activeTimer.id)
       if (error) console.error('Erreur lors de l\'arrêt du minuteur:', error)
-      else fetchSessions()
+      else {
+        await fetchSessions()
+        updateQuickStats()
+      }
     }
     setActiveTimer(null)
     setTimeLeft(0)
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current)
-    }
   }
 
   const handleTimerComplete = () => {
@@ -141,6 +142,7 @@ const TimerPage: React.FC = () => {
     }
 
     setSessions(data as SessionData[])
+    updateQuickStats()
   }
 
   const getTotalDuration = (type: string) => {
@@ -149,12 +151,14 @@ const TimerPage: React.FC = () => {
       .reduce((acc, session) => acc + session.duration, 0)
   }
 
-  const pieChartData = [
-    { name: 'Pomodoro', value: getTotalDuration('pomodoro') },
-    { name: 'Deepwork', value: getTotalDuration('deepwork') },
-    { name: 'Pause Courte', value: getTotalDuration('shortbreak') },
-    { name: 'Pause Longue', value: getTotalDuration('longbreak') },
-  ].filter(item => item.value > 0)
+  const updateQuickStats = () => {
+    setPieChartData([
+      { name: 'Pomodoro', value: getTotalDuration('pomodoro') },
+      { name: 'Deepwork', value: getTotalDuration('deepwork') },
+      { name: 'Pause Courte', value: getTotalDuration('shortbreak') },
+      { name: 'Pause Longue', value: getTotalDuration('longbreak') },
+    ].filter(item => item.value > 0))
+  }
 
   const formatTime = (minutes: number) => {
     const hours = Math.floor(minutes / 60)
@@ -260,35 +264,34 @@ const TimerPage: React.FC = () => {
       <div className="bg-white p-6 rounded-lg shadow-lg mb-8">
         <h2 className="text-2xl mb-4 text-center">Analyses</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div>
-  <h3 className="text-xl mb-2 text-center">Distribution du Temps</h3>
-  <ResponsiveContainer width="100%" height={200}>
-    <PieChart>
-      <Pie
-        data={pieChartData}
-        cx="50%"
-        cy="50%"
-        innerRadius={60}
-        outerRadius={80}
-        fill="#8884d8"
-        dataKey="value"
-      >
-        {pieChartData.map((entry, index) => (
-          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-        ))}
-      </Pie>
-    </PieChart>
-  </ResponsiveContainer>
-  <div className="mt-4 flex flex-wrap justify-center">
-    {pieChartData.map((entry, index) => (
-      <div key={index} className="flex items-center mr-4 mb-2">
-        <div className="w-4 h-4 mr-2" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
-        <span>{entry.name}: {((entry.value / pieChartData.reduce((acc, curr) => acc + curr.value, 0)) * 100).toFixed(1)}%</span>
-      </div>
-    ))}
-  </div>
-</div>
-
+          <div>
+            <h3 className="text-xl mb-2 text-center">Distribution du Temps</h3>
+            <ResponsiveContainer width="100%" height={200}>
+              <PieChart>
+                <Pie
+                  data={pieChartData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {pieChartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="mt-4 flex flex-wrap justify-center">
+              {pieChartData.map((entry, index) => (
+                <div key={index} className="flex items-center mr-4 mb-2">
+                  <div className="w-4 h-4 mr-2" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
+                  <span>{entry.name}: {((entry.value / pieChartData.reduce((acc, curr) => acc + curr.value, 0)) * 100).toFixed(1)}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
           <div>
             <h3 className="text-xl mb-2 text-center">Statistiques Rapides</h3>
             <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
@@ -310,6 +313,15 @@ const TimerPage: React.FC = () => {
               </div>
             </div>
           </div>
+        </div>
+        <div className="mt-8 flex justify-center">
+          <Calendar
+            mode="single"
+            selected={selectedDate}
+            onSelect={(date) => setSelectedDate(date || new Date())}
+            className="rounded-md border shadow-md"
+            locale={fr}
+          />
         </div>
       </div>
     </div>
