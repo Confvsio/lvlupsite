@@ -67,24 +67,27 @@ const TimerPage = () => {
     const { data, error } = await supabase.from('sessions').insert({
       type: type,
       start_time: new Date().toISOString(),
-      duration: getTimerDuration(type) / 60,
+      duration: 0,  // Initialize duration as 0
       task_name: taskName
     }).select()
     if (error) console.error('Error starting timer:', error)
-    else fetchAnalytics() // Refresh analytics after starting a new session
+    else fetchAnalytics()
   }
 
   const stopTimer = async () => {
     if (activeTimer) {
+      const actualDuration = (getTimerDuration(activeTimer) - timeLeft) / 60
       const { error } = await supabase.from('sessions').update({
-        end_time: new Date().toISOString()
-      }).eq('start_time', new Date(Date.now() - timeLeft * 1000).toISOString())
+        end_time: new Date().toISOString(),
+        duration: actualDuration  // Update with actual duration
+      }).eq('start_time', new Date(Date.now() - getTimerDuration(activeTimer) * 1000).toISOString())
       if (error) console.error('Error stopping timer:', error)
-      else fetchAnalytics() // Refresh analytics after stopping a session
+      else fetchAnalytics()
     }
     setActiveTimer(null)
     setTimeLeft(0)
   }
+
 
   const handleTimerComplete = () => {
     if (soundEnabled && audioRef.current) {
@@ -188,7 +191,7 @@ const TimerPage = () => {
           {showSettings ? 'Hide' : 'Show'} Settings
         </Button>
       </div>
-
+  
       <AnimatePresence>
         {showSettings && (
           <motion.div
@@ -237,10 +240,10 @@ const TimerPage = () => {
           </motion.div>
         )}
       </AnimatePresence>
-
+  
       <div className="bg-white p-6 rounded-lg shadow-lg mb-8">
-        <h2 className="text-2xl mb-4">Analytics</h2>
-        <div className="flex flex-col md:flex-row gap-8">
+        <h2 className="text-2xl mb-4 text-center">Analytics</h2>
+        <div className="flex flex-col lg:flex-row gap-8">
           <div className="flex-1">
             <Calendar
               mode="single"
@@ -248,39 +251,37 @@ const TimerPage = () => {
               onSelect={(date) => setSelectedDate(date || new Date())}
               className="rounded-md border"
             />
-          </div>
-          <div className="flex-1">
-            <h3 className="text-xl mb-2">Quick Stats</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <h4 className="font-semibold">Total Pomodoros</h4>
-                <p>{analyticsData.filter(s => s.type === 'pomodoro').length}</p>
-              </div>
-              <div>
-                <h4 className="font-semibold">Total Deep Work</h4>
-                <p>{analyticsData.filter(s => s.type === 'deepwork').length}</p>
-              </div>
-              <div>
-                <h4 className="font-semibold">Productive Time</h4>
-                <p>{formatTime(getTotalDuration('pomodoro') + getTotalDuration('deepwork'))}</p>
-              </div>
-              <div>
-                <h4 className="font-semibold">Break Time</h4>
-                <p>{formatTime(getTotalDuration('shortbreak') + getTotalDuration('longbreak'))}</p>
+            <div className="mt-4">
+              <h3 className="text-xl mb-2">Quick Stats</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h4 className="font-semibold">Total Pomodoros</h4>
+                  <p>{analyticsData.filter(s => s.type === 'pomodoro').length}</p>
+                </div>
+                <div>
+                  <h4 className="font-semibold">Total Deep Work</h4>
+                  <p>{analyticsData.filter(s => s.type === 'deepwork').length}</p>
+                </div>
+                <div>
+                  <h4 className="font-semibold">Productive Time</h4>
+                  <p>{formatTime(getTotalDuration('pomodoro') + getTotalDuration('deepwork'))}</p>
+                </div>
+                <div>
+                  <h4 className="font-semibold">Break Time</h4>
+                  <p>{formatTime(getTotalDuration('shortbreak') + getTotalDuration('longbreak'))}</p>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div>
-            <h3 className="text-xl mb-2">Time Distribution</h3>
+          <div className="flex-1">
+            <h3 className="text-xl mb-2 text-center">Time Distribution</h3>
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
                   data={pieChartData}
                   cx="50%"
                   cy="50%"
-                  labelLine={false}
+                  labelLine={true}
                   outerRadius={80}
                   fill="#8884d8"
                   dataKey="value"
@@ -291,43 +292,44 @@ const TimerPage = () => {
                   ))}
                 </Pie>
                 <Tooltip />
+                <Legend layout="vertical" align="right" verticalAlign="middle" />
               </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div>
-            <h3 className="text-xl mb-2">Session Timeline</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={analyticsData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="start_time" tickFormatter={(time) => format(new Date(time), 'HH:mm')} />
-                <YAxis />
-                <Tooltip labelFormatter={(label) => format(new Date(label), 'HH:mm')} />
-                <Legend />
-                <Line type="monotone" dataKey="duration" stroke="#8884d8" name="Duration (minutes)" />
-              </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
         <div className="mt-8">
-          <h3 className="text-xl mb-2">Session Summary</h3>
+          <h3 className="text-xl mb-2 text-center">Session Timeline</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={analyticsData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="start_time" tickFormatter={(time) => format(new Date(time), 'HH:mm')} />
+              <YAxis />
+              <Tooltip labelFormatter={(label) => format(new Date(label), 'HH:mm')} />
+              <Legend />
+              <Line type="monotone" dataKey="duration" stroke="#8884d8" name="Duration (minutes)" />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="mt-8">
+          <h3 className="text-xl mb-2 text-center">Session Summary</h3>
           <ul className="space-y-2">
             {analyticsData.map((session, index) => (
-                            <li key={index} className="bg-gray-100 p-2 rounded flex justify-between items-center">
-                            <span>
-                              <span className="font-semibold">{format(new Date(session.start_time), 'HH:mm')}</span>
-                              <span className="ml-2">{session.type.charAt(0).toUpperCase() + session.type.slice(1)}</span>
-                            </span>
-                            <span>
-                              {session.duration} minutes
-                              {session.task_name && <span className="ml-2 text-gray-600">({session.task_name})</span>}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              )
-            }
+              <li key={index} className="bg-gray-100 p-2 rounded flex justify-between items-center">
+                <span>
+                  <span className="font-semibold">{format(new Date(session.start_time), 'HH:mm')}</span>
+                  <span className="ml-2">{session.type.charAt(0).toUpperCase() + session.type.slice(1)}</span>
+                </span>
+                <span>
+                  {session.duration.toFixed(1)} minutes
+                  {session.task_name && <span className="ml-2 text-gray-600">({session.task_name})</span>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </div>
+  )
+}
             
-            export default TimerPage
+export default TimerPage
