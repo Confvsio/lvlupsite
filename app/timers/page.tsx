@@ -14,6 +14,7 @@ import debounce from 'lodash/debounce'
 
 type TimerType = 'pomodoro' | 'deepWork'
 type TimerState = 'idle' | 'running' | 'paused' | 'break'
+type TimeRange = 'day' | 'week' | 'month' | 'lifetime'
 
 export default function TimersPage() {
   const [activeTimer, setActiveTimer] = useState<TimerType>('pomodoro')
@@ -34,22 +35,27 @@ export default function TimersPage() {
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [dailySessions, setDailySessions] = useState({ pomodoro: 0, deepWork: 0 })
   const [weeklySessions, setWeeklySessions] = useState({ pomodoro: 0, deepWork: 0 })
+  const [monthlySessions, setMonthlySessions] = useState({ pomodoro: 0, deepWork: 0 })
+  const [lifetimeSessions, setLifetimeSessions] = useState({ pomodoro: 0, deepWork: 0 })
   const [totalFocusTime, setTotalFocusTime] = useState({ pomodoro: 0, deepWork: 0 })
   const [longestStreak, setLongestStreak] = useState({ pomodoro: 0, deepWork: 0 })
   const [weeklyData, setWeeklyData] = useState<any[]>([])
+  const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>('day')
 
   const user = useUser()
   const supabase = useSupabaseClient()
 
   const fetchUserData = async () => {
+    if (!user) return
+
     const { data, error } = await supabase
       .from('user_timer_data')
       .select('*')
-      .eq('user_id', user!.id)
+      .eq('user_id', user.id)
       .single()
 
     if (error) {
-      console.error('Erreur lors de la récupération des données utilisateur:', error)
+      console.error('Error fetching user data:', error)
     } else if (data) {
       setPomoDuration(data.pomo_duration)
       setDeepWorkDuration(data.deep_work_duration)
@@ -60,6 +66,8 @@ export default function TimersPage() {
       setSoundEnabled(data.sound_enabled)
       setDailySessions(data.daily_sessions)
       setWeeklySessions(data.weekly_sessions)
+      setMonthlySessions(data.monthly_sessions)
+      setLifetimeSessions(data.lifetime_sessions)
       setTotalFocusTime(data.total_focus_time)
       setLongestStreak(data.longest_streak)
       setWeeklyData(data.weekly_data || [])
@@ -67,10 +75,12 @@ export default function TimersPage() {
   }
 
   const updateUserData = useCallback(async () => {
+    if (!user) return
+
     const { error } = await supabase
       .from('user_timer_data')
       .upsert({
-        user_id: user!.id,
+        user_id: user.id,
         pomo_duration: pomoDuration,
         deep_work_duration: deepWorkDuration,
         pomo_short_break: pomoShortBreak,
@@ -80,15 +90,17 @@ export default function TimersPage() {
         sound_enabled: soundEnabled,
         daily_sessions: dailySessions,
         weekly_sessions: weeklySessions,
+        monthly_sessions: monthlySessions,
+        lifetime_sessions: lifetimeSessions,
         total_focus_time: totalFocusTime,
         longest_streak: longestStreak,
         weekly_data: weeklyData,
       })
 
     if (error) {
-      console.error('Erreur lors de la mise à jour des données utilisateur:', error)
+      console.error('Error updating user data:', error)
     }
-  }, [user, pomoDuration, deepWorkDuration, pomoShortBreak, pomoLongBreak, deepWorkBreak, autoBreak, soundEnabled, dailySessions, weeklySessions, totalFocusTime, longestStreak, weeklyData, supabase])
+  }, [user, pomoDuration, deepWorkDuration, pomoShortBreak, pomoLongBreak, deepWorkBreak, autoBreak, soundEnabled, dailySessions, weeklySessions, monthlySessions, lifetimeSessions, totalFocusTime, longestStreak, weeklyData, supabase])
 
   const debouncedUpdateUserData = useCallback(
     debounce(() => {
@@ -148,6 +160,8 @@ export default function TimersPage() {
   }, [soundEnabled, autoBreak])
 
   const updateSessionCount = useCallback((timerType: TimerType) => {
+    const duration = timerType === 'pomodoro' ? pomoDuration : deepWorkDuration
+    
     setDailySessions(prev => ({
       ...prev,
       [timerType]: prev[timerType] + 1
@@ -156,9 +170,17 @@ export default function TimersPage() {
       ...prev,
       [timerType]: prev[timerType] + 1
     }))
+    setMonthlySessions(prev => ({
+      ...prev,
+      [timerType]: prev[timerType] + 1
+    }))
+    setLifetimeSessions(prev => ({
+      ...prev,
+      [timerType]: prev[timerType] + 1
+    }))
     setTotalFocusTime(prev => ({
       ...prev,
-      [timerType]: prev[timerType] + (timerType === 'pomodoro' ? pomoDuration : deepWorkDuration)
+      [timerType]: prev[timerType] + duration
     }))
     setLongestStreak(prev => ({
       ...prev,
@@ -196,6 +218,14 @@ export default function TimersPage() {
     return totalSessions > 0 ? Math.min(totalSessions * 10, 100) : 0
   }
 
+  const calculateAverageProductivity = useCallback((timerType: TimerType): number => {
+    const last7Days = weeklyData.slice(-7);
+    const totalSessions = last7Days.reduce((sum, day) => sum + (day[timerType] || 0), 0);
+    const totalProductivity = last7Days.reduce((sum, day) => sum + (day.productivity || 0), 0);
+    const averageProductivity = totalSessions > 0 ? (totalProductivity / last7Days.length) : 0;
+    return Math.round(averageProductivity * 10) / 10;
+  }, [weeklyData]);
+
   const playNotificationSound = () => {
     const audio = new Audio('/notification.mp3')
     audio.play()
@@ -219,47 +249,7 @@ export default function TimersPage() {
     const elapsedMinutes = Math.floor(elapsedTime / 60)
     
     if (elapsedMinutes > 0) {
-      setDailySessions(prev => ({
-        ...prev,
-        [timerType]: prev[timerType] + 1
-      }))
-      setWeeklySessions(prev => ({
-        ...prev,
-        [timerType]: prev[timerType] + 1
-      }))
-      setTotalFocusTime(prev => ({
-        ...prev,
-        [timerType]: prev[timerType] + elapsedMinutes
-      }))
-      setLongestStreak(prev => ({
-        ...prev,
-        [timerType]: Math.max(prev[timerType], dailySessions[timerType] + 1)
-      }))
-
-      const today = new Date().toISOString().split('T')[0]
-      setWeeklyData(prev => {
-        const updatedData = [...prev]
-        const todayIndex = updatedData.findIndex(d => d.date === today)
-        if (todayIndex !== -1) {
-          updatedData[todayIndex] = {
-            ...updatedData[todayIndex],
-            [timerType]: (updatedData[todayIndex][timerType] || 0) + 1,
-            productivity: calculateProductivity({
-              ...updatedData[todayIndex],
-              [timerType]: (updatedData[todayIndex][timerType] || 0) + 1
-            })
-          }
-        } else {
-          updatedData.push({ 
-            date: today, 
-            [timerType]: 1,
-            productivity: calculateProductivity({ [timerType]: 1 })
-          })
-        }
-        return updatedData
-      })
-
-      debouncedUpdateUserData()
+      updateSessionCount(timerType)
     }
 
     setTimerStates(prev => ({ ...prev, [timerType]: 'idle' }))
@@ -283,6 +273,21 @@ export default function TimersPage() {
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+  }
+
+  const getSessionsForTimeRange = (range: TimeRange) => {
+    switch (range) {
+      case 'day':
+        return dailySessions
+      case 'week':
+        return weeklySessions
+      case 'month':
+        return monthlySessions
+      case 'lifetime':
+        return lifetimeSessions
+      default:
+        return dailySessions
+    }
   }
 
   return (
@@ -329,18 +334,25 @@ export default function TimersPage() {
           <CardTitle className="text-3xl">Statistiques</CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="mb-4">
+            <label className="mr-2">Période:</label>
+            <select
+              value={selectedTimeRange}
+              onChange={(e) => setSelectedTimeRange(e.target.value as TimeRange)}
+              className="p-2 border rounded"
+            >
+              <option value="day">Jour</option>
+              <option value="week">Semaine</option>
+              <option value="month">Mois</option>
+              <option value="lifetime">Tout le temps</option>
+            </select>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-          <StatCard
-              icon={<ClockIcon className="h-8 w-8 text-blue-500" />}
-              title="Sessions aujourd'hui"
-              pomodoro={dailySessions.pomodoro}
-              deepWork={dailySessions.deepWork}
-            />
             <StatCard
-              icon={<CalendarIcon className="h-8 w-8 text-green-500" />}
-              title="Sessions cette semaine"
-              pomodoro={weeklySessions.pomodoro}
-              deepWork={weeklySessions.deepWork}
+              icon={<ClockIcon className="h-8 w-8 text-blue-500" />}
+              title="Sessions"
+              pomodoro={getSessionsForTimeRange(selectedTimeRange).pomodoro}
+              deepWork={getSessionsForTimeRange(selectedTimeRange).deepWork}
             />
             <StatCard
               icon={<FireIcon className="h-8 w-8 text-red-500" />}
@@ -354,6 +366,13 @@ export default function TimersPage() {
               title="Plus longue série"
               pomodoro={longestStreak.pomodoro}
               deepWork={longestStreak.deepWork}
+            />
+            <StatCard
+              icon={<CalendarIcon className="h-8 w-8 text-green-500" />}
+              title="Productivité moyenne (7 jours)"
+              pomodoro={calculateAverageProductivity('pomodoro')}
+              deepWork={calculateAverageProductivity('deepWork')}
+              format="percentage"
             />
           </div>
         </CardContent>
@@ -501,7 +520,7 @@ interface StatCardProps {
   title: string;
   pomodoro: number;
   deepWork: number;
-  format?: 'number' | 'time';
+  format?: 'number' | 'time' | 'percentage';
 }
 
 function StatCard({ icon, title, pomodoro, deepWork, format = 'number' }: StatCardProps) {
@@ -510,6 +529,9 @@ function StatCard({ icon, title, pomodoro, deepWork, format = 'number' }: StatCa
       const hours = Math.floor(value / 60)
       const minutes = value % 60
       return `${hours}h ${minutes}m`
+    }
+    if (format === 'percentage') {
+      return `${value.toFixed(1)}%`
     }
     return value
   }
