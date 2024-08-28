@@ -292,7 +292,7 @@ export default function TimersPage() {
 
   return (
     <div className="container mx-auto p-8 max-w-7xl">
-      <h1 className="text-5xl font-bold mb-12 text-center text-gray-800">Minuteries de Productivité</h1>
+      <h1 className="text-5xl font-bold mb-12 text-center text-gray-800">Timers</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
         {['pomodoro', 'deepWork'].map((type) => (
