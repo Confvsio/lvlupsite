@@ -5,7 +5,7 @@ import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react'
 import Link from 'next/link'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
-import { FaTrophy, FaChartLine, FaCalendarCheck, FaDiscord } from 'react-icons/fa'
+import { FaTrophy, FaChartLine, FaCalendarCheck, FaClock, FaBook } from 'react-icons/fa'
 
 type Goal = {
   id: number
@@ -26,19 +26,31 @@ type Habit = {
 const COLORS = ['#4F46E5', '#10B981', '#F59E0B']
 
 export default function Dashboard() {
-  const user = useUser()
-  const supabase = useSupabaseClient()
   const [username, setUsername] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [goals, setGoals] = useState<Goal[]>([])
   const [habits, setHabits] = useState<Habit[]>([])
+  const [timerStats, setTimerStats] = useState({
+    pomodoro: { sessions: 0, totalTime: 0 },
+    deepWork: { sessions: 0, totalTime: 0 },
+  })
+  const [journalStats, setJournalStats] = useState({
+    totalEntries: 0,
+    lastEntryDate: '',
+    uniqueTags: 0,
+  })
+
+  const user = useUser()
+  const supabase = useSupabaseClient()
 
   useEffect(() => {
     if (user) {
       setUsername(user.user_metadata.username || null)
       fetchGoals()
       fetchHabits()
+      fetchTimerStats()
+      fetchJournalStats()
     }
   }, [user])
 
@@ -73,6 +85,60 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Error fetching habits:', error)
       setError('Failed to fetch habits. Please try refreshing the page.')
+    }
+  }
+
+  async function fetchTimerStats() {
+    try {
+      const { data, error } = await supabase
+        .from('user_timer_data')
+        .select('daily_sessions, total_focus_time')
+        .eq('user_id', user?.id)
+        .single()
+
+      if (error) throw error
+      if (data) {
+        setTimerStats({
+          pomodoro: {
+            sessions: data.daily_sessions.pomodoro,
+            totalTime: data.total_focus_time.pomodoro,
+          },
+          deepWork: {
+            sessions: data.daily_sessions.deepWork,
+            totalTime: data.total_focus_time.deepWork,
+          },
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching timer stats:', error)
+      setError('Failed to fetch timer stats. Please try refreshing the page.')
+    }
+  }
+
+  async function fetchJournalStats() {
+    try {
+      const { data, error } = await supabase
+        .from('journal_entries')
+        .select('id, date, tags')
+        .order('date', { ascending: false })
+
+      if (error) throw error
+
+      if (data) {
+        const totalEntries = data.length
+        const lastEntryDate = data[0]?.date || ''
+        const allTags = new Set(data.flatMap(entry => entry.tags))
+        const uniqueTags = allTags.size
+
+        setJournalStats({
+          totalEntries,
+          lastEntryDate,
+          uniqueTags,
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching journal stats:', error)
+      setError('Failed to fetch journal stats. Please try refreshing the page.')
     } finally {
       setIsLoading(false)
     }
@@ -114,26 +180,43 @@ export default function Dashboard() {
           <p className="text-gray-600">objectifs récents</p>
         </DashboardCard>
 
-        <DashboardCard title="Niveau" icon={<FaTrophy className="text-yellow-500" size={24} />}>
-          <div className="text-center">
-            <p className="text-4xl font-bold text-indigo-600">Niveau 5</p>
-            <p className="text-gray-600">450 XP / 1000 XP</p>
-            <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2">
-              <div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: '45%' }}></div>
-            </div>
+        <DashboardCard title="Minuteries" icon={<FaClock className="text-blue-500" size={24} />}>
+          <div className="space-y-2">
+            <p className="text-sm">
+              <span className="font-medium">Pomodoro:</span> {timerStats.pomodoro.sessions} sessions
+            </p>
+            <p className="text-sm">
+              <span className="font-medium">Deep Work:</span> {timerStats.deepWork.sessions} sessions
+            </p>
+            <p className="text-sm">
+              <span className="font-medium">Temps total:</span> {formatTime(timerStats.pomodoro.totalTime + timerStats.deepWork.totalTime)}
+            </p>
           </div>
+          <Link href="/timers" className="text-indigo-600 hover:underline mt-2 inline-block">
+            Voir les minuteries
+          </Link>
         </DashboardCard>
 
-        <DashboardCard title="Habitudes actives" icon={<FaCalendarCheck className="text-green-500" size={24} />}>
+        <DashboardCard title="Journal" icon={<FaBook className="text-green-500" size={24} />}>
+          <div className="space-y-2">
+            <p className="text-sm">
+              <span className="font-medium">Entrées totales:</span> {journalStats.totalEntries}
+            </p>
+            <p className="text-sm">
+              <span className="font-medium">Dernière entrée:</span> {journalStats.lastEntryDate}
+            </p>
+            <p className="text-sm">
+              <span className="font-medium">Tags uniques:</span> {journalStats.uniqueTags}
+            </p>
+          </div>
+          <Link href="/journaling" className="text-indigo-600 hover:underline mt-2 inline-block">
+            Voir le journal
+          </Link>
+        </DashboardCard>
+
+        <DashboardCard title="Habitudes actives" icon={<FaCalendarCheck className="text-purple-500" size={24} />}>
           <p className="text-3xl font-bold text-indigo-600">{habits.length}</p>
           <p className="text-gray-600">habitudes suivies</p>
-        </DashboardCard>
-
-        <DashboardCard title="Meilleure série" icon={<FaTrophy className="text-purple-500" size={24} />}>
-          <p className="text-3xl font-bold text-indigo-600">
-            {habits.reduce((max, habit) => Math.max(max, habit.longest_streak), 0)}
-          </p>
-          <p className="text-gray-600">jours consécutifs</p>
         </DashboardCard>
       </div>
 
@@ -248,4 +331,10 @@ function ProgressBar({ label, progress }: { label: string, progress: number }) {
       </div>
     </div>
   )
+}
+
+function formatTime(minutes: number): string {
+  const hours = Math.floor(minutes / 60)
+  const mins = minutes % 60
+  return `${hours}h ${mins}m`
 }

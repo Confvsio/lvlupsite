@@ -57,6 +57,17 @@ type ActivityItem = {
   timestamp: string
 }
 
+type TimerStats = {
+  pomodoro: { sessions: number, totalTime: number },
+  deepWork: { sessions: number, totalTime: number },
+}
+
+type JournalStats = {
+  totalEntries: number,
+  lastEntryDate: string,
+  uniqueTags: number,
+}
+
 export default function ProfilePage() {
   const user = useUser()
   const supabase = useSupabaseClient()
@@ -65,6 +76,8 @@ export default function ProfilePage() {
   const [goals, setGoals] = useState<Goal[]>([])
   const [habits, setHabits] = useState<Habit[]>([])
   const [activityFeed, setActivityFeed] = useState<ActivityItem[]>([])
+  const [timerStats, setTimerStats] = useState<TimerStats | null>(null)
+  const [journalStats, setJournalStats] = useState<JournalStats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
   const [editedProfile, setEditedProfile] = useState<UserProfile | null>(null)
@@ -76,6 +89,8 @@ export default function ProfilePage() {
       fetchGoals()
       fetchHabits()
       fetchActivityFeed()
+      fetchTimerStats()
+      fetchJournalStats()
     }
   }, [user])
 
@@ -150,6 +165,61 @@ export default function ProfilePage() {
     }
   }
 
+  async function fetchTimerStats() {
+    try {
+      const { data, error } = await supabase
+        .from('user_timer_data')
+        .select('daily_sessions, total_focus_time')
+        .eq('user_id', user?.id)
+        .single()
+
+      if (error) throw error
+      if (data) {
+        setTimerStats({
+          pomodoro: {
+            sessions: data.daily_sessions.pomodoro,
+            totalTime: data.total_focus_time.pomodoro,
+          },
+          deepWork: {
+            sessions: data.daily_sessions.deepWork,
+            totalTime: data.total_focus_time.deepWork,
+          },
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching timer stats:', error)
+    }
+  }
+
+  async function fetchJournalStats() {
+    try {
+      const { data, error } = await supabase
+        .from('journal_entries')
+        .select('id, date, tags')
+        .eq('user_id', user?.id)
+        .order('date', { ascending: false })
+
+      if (error) throw error
+
+      if (data) {
+        const totalEntries = data.length
+        const lastEntryDate = data[0]?.date || ''
+        const allTags = new Set(data.flatMap(entry => entry.tags))
+        const uniqueTags = allTags.size
+
+        setJournalStats({
+          totalEntries,
+          lastEntryDate,
+          uniqueTags,
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching journal stats:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   async function updateProfile() {
     if (!editedProfile) return
 
@@ -186,7 +256,11 @@ export default function ProfilePage() {
         updateProfile={updateProfile}
       />
 
-      <AnalyticsDashboard analyticsData={analyticsData} />
+      <AnalyticsDashboard 
+        analyticsData={analyticsData} 
+        timerStats={timerStats}
+        journalStats={journalStats}
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <GoalsOverview goals={goals} />
@@ -275,7 +349,11 @@ function UserInfoSection({ profile, isEditing, editedProfile, setEditedProfile, 
   )
 }
 
-function AnalyticsDashboard({ analyticsData }: { analyticsData: AnalyticsData | null }) {
+function AnalyticsDashboard({ analyticsData, timerStats, journalStats }: { 
+  analyticsData: AnalyticsData | null,
+  timerStats: TimerStats | null,
+  journalStats: JournalStats | null
+}) {
   if (!analyticsData) return (
     <div className="bg-white shadow rounded-lg p-6 mb-6">
       <h2 className="text-xl font-semibold mb-4">Tableau de bord analytique</h2>
@@ -368,8 +446,34 @@ function AnalyticsDashboard({ analyticsData }: { analyticsData: AnalyticsData | 
           </BarChart>
         </ResponsiveContainer>
       </div>
-      <div className="mt-4">
-        <p className="text-lg font-medium">Plus longue série : <span className="text-indigo-600">{analyticsData.longestStreak} jours</span></p>
+      <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <h3 className="text-lg font-medium mb-2">Statistiques des minuteries</h3>
+          {timerStats ? (
+            <div>
+              <p>Pomodoro: {timerStats.pomodoro.sessions} sessions</p>
+              <p>Deep Work: {timerStats.deepWork.sessions} sessions</p>
+              <p>Temps total: {formatTime(timerStats.pomodoro.totalTime + timerStats.deepWork.totalTime)}</p>
+            </div>
+          ) : (
+            <p>Aucune donnée de minuterie disponible.</p>
+          )}
+        </div>
+        <div>
+          <h3 className="text-lg font-medium mb-2">Statistiques du journal</h3>
+          {journalStats ? (
+            <div>
+              <p>Entrées totales: {journalStats.totalEntries}</p>
+              <p>Dernière entrée: {journalStats.lastEntryDate}</p>
+              <p>Tags uniques: {journalStats.uniqueTags}</p>
+            </div>
+          ) : (
+            <p>Aucune donnée de journal disponible.</p>
+          )}
+        </div>
+        <div>
+          <p className="text-lg font-medium">Plus longue série : <span className="text-indigo-600">{analyticsData.longestStreak} jours</span></p>
+        </div>
       </div>
     </div>
   )
@@ -474,4 +578,10 @@ function ActivityFeed({ activityItems }: { activityItems: ActivityItem[] }) {
       </div>
     </div>
   )
+}
+
+function formatTime(minutes: number): string {
+  const hours = Math.floor(minutes / 60)
+  const mins = minutes % 60
+  return `${hours}h ${mins}m`
 }
