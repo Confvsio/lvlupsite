@@ -26,6 +26,10 @@ export default function TimersPage() {
     pomodoro: 25 * 60,
     deepWork: 60 * 60
   })
+  const [startTimes, setStartTimes] = useState<Record<TimerType, number | null>>({
+    pomodoro: null,
+    deepWork: null
+  })
   const [pomoDuration, setPomoDuration] = useState(25)
   const [deepWorkDuration, setDeepWorkDuration] = useState(60)
   const [pomoShortBreak, setPomoShortBreak] = useState(5)
@@ -56,20 +60,41 @@ export default function TimersPage() {
 
     if (error) {
       console.error('Error fetching user data:', error)
+      // If no data exists, create a new entry
+      if (error.code === 'PGRST116') {
+        await supabase.from('user_timer_data').insert({
+          user_id: user.id,
+          pomo_duration: 25,
+          deep_work_duration: 60,
+          pomo_short_break: 5,
+          pomo_long_break: 15,
+          deep_work_break: 10,
+          auto_break: false,
+          sound_enabled: true,
+          daily_sessions: { pomodoro: 0, deepWork: 0 },
+          weekly_sessions: { pomodoro: 0, deepWork: 0 },
+          monthly_sessions: { pomodoro: 0, deepWork: 0 },
+          lifetime_sessions: { pomodoro: 0, deepWork: 0 },
+          total_focus_time: { pomodoro: 0, deepWork: 0 },
+          longest_streak: { pomodoro: 0, deepWork: 0 },
+          weekly_data: []
+        })
+        return
+      }
     } else if (data) {
-      setPomoDuration(data.pomo_duration || 25)
-      setDeepWorkDuration(data.deep_work_duration || 60)
-      setPomoShortBreak(data.pomo_short_break || 5)
-      setPomoLongBreak(data.pomo_long_break || 15)
-      setDeepWorkBreak(data.deep_work_break || 10)
-      setAutoBreak(data.auto_break || false)
-      setSoundEnabled(data.sound_enabled || true)
-      setDailySessions(data.daily_sessions || { pomodoro: 0, deepWork: 0 })
-      setWeeklySessions(data.weekly_sessions || { pomodoro: 0, deepWork: 0 })
-      setMonthlySessions(data.monthly_sessions || { pomodoro: 0, deepWork: 0 })
-      setLifetimeSessions(data.lifetime_sessions || { pomodoro: 0, deepWork: 0 })
-      setTotalFocusTime(data.total_focus_time || { pomodoro: 0, deepWork: 0 })
-      setLongestStreak(data.longest_streak || { pomodoro: 0, deepWork: 0 })
+      setPomoDuration(data.pomo_duration)
+      setDeepWorkDuration(data.deep_work_duration)
+      setPomoShortBreak(data.pomo_short_break)
+      setPomoLongBreak(data.pomo_long_break)
+      setDeepWorkBreak(data.deep_work_break)
+      setAutoBreak(data.auto_break)
+      setSoundEnabled(data.sound_enabled)
+      setDailySessions(data.daily_sessions)
+      setWeeklySessions(data.weekly_sessions)
+      setMonthlySessions(data.monthly_sessions)
+      setLifetimeSessions(data.lifetime_sessions)
+      setTotalFocusTime(data.total_focus_time)
+      setLongestStreak(data.longest_streak)
       setWeeklyData(data.weekly_data || [])
     }
   }, [user, supabase])
@@ -160,7 +185,11 @@ export default function TimersPage() {
   }, [soundEnabled, autoBreak])
 
   const updateSessionCount = useCallback((timerType: TimerType) => {
-    const duration = timerType === 'pomodoro' ? pomoDuration : deepWorkDuration
+    const now = Date.now()
+    const startTime = startTimes[timerType]
+    if (!startTime) return
+
+    const elapsedMinutes = Math.round((now - startTime) / 60000)
     
     setDailySessions(prev => ({
       ...prev,
@@ -180,7 +209,7 @@ export default function TimersPage() {
     }))
     setTotalFocusTime(prev => ({
       ...prev,
-      [timerType]: prev[timerType] + duration
+      [timerType]: prev[timerType] + elapsedMinutes
     }))
     setLongestStreak(prev => ({
       ...prev,
@@ -211,7 +240,7 @@ export default function TimersPage() {
     })
 
     debouncedUpdateUserData()
-  }, [dailySessions, pomoDuration, deepWorkDuration, debouncedUpdateUserData])
+  }, [dailySessions, startTimes, debouncedUpdateUserData])
 
   const calculateProductivity = (dayData: any) => {
     const totalSessions = (dayData.pomodoro || 0) + (dayData.deepWork || 0)
@@ -234,6 +263,7 @@ export default function TimersPage() {
   const startTimer = (timerType: TimerType) => {
     setActiveTimer(timerType)
     setTimerStates(prev => ({ ...prev, [timerType]: 'running' }))
+    setStartTimes(prev => ({ ...prev, [timerType]: Date.now() }))
   }
 
   const pauseTimer = (timerType: TimerType) => {
@@ -245,18 +275,13 @@ export default function TimersPage() {
   }
 
   const stopTimer = (timerType: TimerType) => {
-    const elapsedTime = (timerType === 'pomodoro' ? pomoDuration : deepWorkDuration) * 60 - timesLeft[timerType]
-    const elapsedMinutes = Math.floor(elapsedTime / 60)
-    
-    if (elapsedMinutes > 0) {
-      updateSessionCount(timerType)
-    }
-
+    updateSessionCount(timerType)
     setTimerStates(prev => ({ ...prev, [timerType]: 'idle' }))
     setTimesLeft(prev => ({
       ...prev,
       [timerType]: timerType === 'pomodoro' ? pomoDuration * 60 : deepWorkDuration * 60
     }))
+    setStartTimes(prev => ({ ...prev, [timerType]: null }))
   }
 
   const startBreak = (timerType: TimerType) => {
